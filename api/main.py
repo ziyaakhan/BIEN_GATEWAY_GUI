@@ -71,6 +71,9 @@ def save_users(users):
 
 def load_gateway_config():
     """Load gateway configuration"""
+    # Config dizinini oluştur (yoksa)
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    
     if not GATEWAY_CONFIG_FILE.exists():
         # Create default configuration
         default_config = {
@@ -144,8 +147,30 @@ def load_gateway_config():
 
 def save_gateway_config(config):
     """Save gateway configuration"""
-    with open(GATEWAY_CONFIG_FILE, 'w') as f:
-        json.dump(config, f, indent=2)
+    try:
+        # Config dizinini oluştur (yoksa)
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        
+        # Dosyayı yaz
+        with open(GATEWAY_CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=2)
+        
+        # Dosya izinlerini ayarla (okuma/yazma herkes için)
+        try:
+            os.chmod(GATEWAY_CONFIG_FILE, 0o644)
+        except Exception:
+            pass  # Windows'ta chmod çalışmayabilir
+        
+    except PermissionError as e:
+        error_msg = f"Dosya yazma izni yok: {GATEWAY_CONFIG_FILE}"
+        print(f"Permission error: {error_msg}")
+        print(f"Lütfen şu komutu çalıştırın: sudo chmod 666 {GATEWAY_CONFIG_FILE}")
+        print(f"Veya: sudo chown $USER:$USER {GATEWAY_CONFIG_FILE}")
+        raise HTTPException(status_code=500, detail=error_msg)
+    except Exception as e:
+        error_msg = f"Konfigürasyon kaydedilemedi: {str(e)}"
+        print(f"Save config error: {error_msg}")
+        raise HTTPException(status_code=500, detail=error_msg)
 
 
 def get_session_user(request: Request):
@@ -165,28 +190,168 @@ def get_session_user(request: Request):
 
 def scan_wifi_networks():
     """
-    Scan for WiFi networks
-    Note: This is a placeholder. In production, this would use system commands
-    like 'nmcli' or 'iwlist' on Linux to scan for networks.
+    Scan for WiFi networks using nmcli or iwlist
+    Raspberry Pi için gerçek WiFi tarama implementasyonu
     """
-    # Placeholder implementation
-    # In production, this would execute: nmcli -t -f SSID,SIGNAL,SECURITY dev wifi
-    # or use a Python library like python-wifi or subprocess to call system commands
+    networks = []
     
-    # For now, return mock data
-    # On Raspberry Pi, you would use:
-    # result = subprocess.run(['nmcli', '-t', '-f', 'SSID,SIGNAL,SECURITY', 'dev', 'wifi'], 
-    #                        capture_output=True, text=True)
-    # Parse the output and return structured data
-    
-    mock_networks = [
-        {"ssid": "HomeWiFi", "signal": 90, "encrypted": True},
-        {"ssid": "OfficeNetwork", "signal": 75, "encrypted": True},
-        {"ssid": "GuestNetwork", "signal": 60, "encrypted": False},
-        {"ssid": "PublicWiFi", "signal": 45, "encrypted": False}
-    ]
-    
-    return mock_networks
+    try:
+        # Önce nmcli ile dene (NetworkManager kullanıyorsa)
+        try:
+            result = subprocess.run(
+                ['nmcli', '-t', '-f', 'SSID,SIGNAL,SECURITY', 'dev', 'wifi', 'list'],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False
+            )
+            
+            if result.returncode == 0 and result.stdout.strip():
+                # nmcli çıktısını parse et
+                seen_ssids = set()  # Duplicate SSID'leri önlemek için
+                
+                for line in result.stdout.strip().split('\n'):
+                    if not line:
+                        continue
+                    
+                    parts = line.split(':')
+                    if len(parts) >= 2:
+                        ssid = parts[0].strip()
+                        signal_str = parts[1].strip() if len(parts) > 1 else '0'
+                        security = parts[2].strip() if len(parts) > 2 else ''
+                        
+                        # Boş SSID'leri atla ve duplicate'leri önle
+                        if not ssid or ssid == '--' or ssid in seen_ssids:
+                            continue
+                        
+                        seen_ssids.add(ssid)
+                        
+                        # Signal değerini parse et
+                        try:
+                            signal = int(signal_str) if signal_str.isdigit() else 0
+                        except ValueError:
+                            signal = 0
+                        
+                        # Security bilgisini kontrol et
+                        encrypted = security != '' and security != '--' and 'WPA' in security.upper()
+                        
+                        networks.append({
+                            'ssid': ssid,
+                            'signal': signal,
+                            'encrypted': encrypted
+                        })
+                
+                # Signal gücüne göre sırala (yüksekten düşüğe)
+                networks.sort(key=lambda x: x['signal'], reverse=True)
+                
+                if networks:
+                    return networks
+        
+        except FileNotFoundError:
+            # nmcli bulunamadı, iwlist ile dene
+            pass
+        except subprocess.TimeoutExpired:
+            print("WiFi tarama zaman aşımına uğradı (nmcli)")
+        except Exception as e:
+            print(f"nmcli tarama hatası: {e}")
+        
+        # nmcli başarısız olduysa iwlist ile dene
+        try:
+            result = subprocess.run(
+                ['sudo', 'iwlist', 'wlan0', 'scan'],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False
+            )
+            
+            if result.returncode == 0 and result.stdout.strip():
+                seen_ssids = set()
+                current_ssid = None
+                current_signal = 0
+                current_encrypted = False
+                
+                for line in result.stdout.split('\n'):
+                    line = line.strip()
+                    
+                    # SSID bul
+                    if 'ESSID:' in line:
+                        ssid = line.split('ESSID:')[1].strip().strip('"').strip("'")
+                        if ssid and ssid != 'off/any':
+                            current_ssid = ssid
+                    
+                    # Signal gücü bul
+                    elif 'Signal level=' in line or 'Quality=' in line:
+                        try:
+                            if 'Signal level=' in line:
+                                signal_part = line.split('Signal level=')[1].split()[0]
+                                # dBm formatında (-70 gibi)
+                                signal = abs(int(signal_part.split('/')[0]))
+                                # dBm'i yüzdeye çevir (yaklaşık)
+                                current_signal = max(0, min(100, 100 + signal))
+                            elif 'Quality=' in line:
+                                quality_part = line.split('Quality=')[1].split()[0]
+                                if '/' in quality_part:
+                                    parts = quality_part.split('/')
+                                    current_signal = int((int(parts[0]) / int(parts[1])) * 100)
+                                else:
+                                    current_signal = int(quality_part)
+                        except (ValueError, IndexError):
+                            pass
+                    
+                    # Encryption bul
+                    elif 'Encryption key:' in line:
+                        current_encrypted = 'on' in line.lower()
+                    
+                    # Cell sonu - network bilgilerini kaydet
+                    elif line.startswith('Cell') and current_ssid:
+                        if current_ssid and current_ssid not in seen_ssids:
+                            seen_ssids.add(current_ssid)
+                            networks.append({
+                                'ssid': current_ssid,
+                                'signal': current_signal,
+                                'encrypted': current_encrypted
+                            })
+                        
+                        # Reset
+                        current_ssid = None
+                        current_signal = 0
+                        current_encrypted = False
+                
+                # Son network'i de ekle
+                if current_ssid and current_ssid not in seen_ssids:
+                    networks.append({
+                        'ssid': current_ssid,
+                        'signal': current_signal,
+                        'encrypted': current_encrypted
+                    })
+                
+                # Signal gücüne göre sırala
+                networks.sort(key=lambda x: x['signal'], reverse=True)
+                
+                if networks:
+                    return networks
+        
+        except FileNotFoundError:
+            print("iwlist bulunamadı. WiFi tarama için nmcli veya iwlist gerekli.")
+        except subprocess.TimeoutExpired:
+            print("WiFi tarama zaman aşımına uğradı (iwlist)")
+        except Exception as e:
+            print(f"iwlist tarama hatası: {e}")
+        
+        # Her iki yöntem de başarısız olduysa boş liste döndür
+        if not networks:
+            print("WiFi tarama başarısız. Mock data döndürülüyor.")
+            # Fallback: Mock data (geliştirme için)
+            return [
+                {"ssid": "WiFi tarama başarısız", "signal": 0, "encrypted": False}
+            ]
+        
+        return networks
+        
+    except Exception as e:
+        print(f"WiFi tarama genel hatası: {e}")
+        return []
 
 
 # ============================================================================
