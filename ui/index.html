@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gateway Konfigürasyon</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="login-screen" class="screen active">
+        <div class="login-container">
+            <div class="login-box">
+                <h1>Gateway Yönetim Paneli</h1>
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="username">Kullanıcı Adı</label>
+                        <input type="text" id="username" name="username" class="form-control" placeholder="Kullanıcı adınızı girin" value="admin" required autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Şifre</label>
+                        <input type="password" id="password" name="password" class="form-control" placeholder="Şifrenizi girin" value="admin" required autocomplete="current-password">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Giriş Yap</button>
+                    <div id="login-error" class="error-message"></div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Admin Screen -->
+    <div id="admin-screen" class="screen">
+        <div class="layout">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h2>Ayarlar</h2>
+                </div>
+                <nav class="sidebar-nav">
+                    <a href="#" class="nav-item active" data-section="system">
+                        Sistem
+                    </a>
+                    <a href="#" class="nav-item" data-section="rs485">
+                        RS-485 Ayarları
+                    </a>
+                    <a href="#" class="nav-item" data-section="ble">
+                        BLE Ayarları
+                    </a>
+                    <a href="#" class="nav-item" data-section="lorawan">
+                        LoRaWAN Ayarları
+                    </a>
+                    <a href="#" class="nav-item" data-section="wifi">
+                        WiFi Ayarları
+                    </a>
+                </nav>
+                <div class="sidebar-footer">
+                    <button id="logout-btn" class="btn btn-secondary">Çıkış Yap</button>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="main-content">
+                <div class="content-header">
+                    <h1 id="section-title">Sistem</h1>
+                    <div class="user-info">
+                        <span id="username-display">admin</span>
+                    </div>
+                </div>
+
+                <div class="content-body">
+                    <!-- System Section -->
+                    <div id="section-system" class="section active">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Sistem Ayarları</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-group">
+                                    <label for="gateway-name">Gateway Adı</label>
+                                    <input type="text" id="gateway-name" class="form-control" value="Gateway-01">
+                                </div>
+                                <button id="save-system" class="btn btn-primary">Kaydet</button>
+                                <div id="system-message" class="message"></div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Şifre Değiştirme</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-group">
+                                    <label for="current-password">Mevcut Şifre</label>
+                                    <input type="password" id="current-password" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label for="new-password">Yeni Şifre</label>
+                                    <input type="password" id="new-password" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label for="confirm-password">Yeni Şifre (Tekrar)</label>
+                                    <input type="password" id="confirm-password" class="form-control">
+                                </div>
+                                <button id="change-password" class="btn btn-primary">Şifreyi Değiştir</button>
+                                <div id="password-message" class="message"></div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Gateway İşlemleri</h3>
+                            </div>
+                            <div class="card-body">
+                                <button id="restart-gateway" class="btn btn-danger">Gateway'i Yeniden Başlat</button>
+                                <p class="text-muted" style="margin-top: 10px;">
+                                    Bu işlem gateway'i yeniden başlatacaktır.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RS-485 Section -->
+                    <div id="section-rs485" class="section">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>RS-485 Konfigürasyonu</h3>
+                                <div class="toggle-switch">
+                                    <input type="checkbox" id="rs485-enabled" class="toggle-input">
+                                    <label for="rs485-enabled" class="toggle-label"></label>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="rs485-baudrate">Baud Rate</label>
+                                        <select id="rs485-baudrate" class="form-control">
+                                            <option value="9600">9600</option>
+                                            <option value="19200">19200</option>
+                                            <option value="38400">38400</option>
+                                            <option value="57600">57600</option>
+                                            <option value="115200">115200</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="rs485-data-bits">Data Bits</label>
+                                        <select id="rs485-data-bits" class="form-control">
+                                            <option value="5">5</option>
+                                            <option value="6">6</option>
+                                            <option value="7">7</option>
+                                            <option value="8" selected>8</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="rs485-stop-bits">Stop Bits</label>
+                                        <select id="rs485-stop-bits" class="form-control">
+                                            <option value="1" selected>1</option>
+                                            <option value="1.5">1.5</option>
+                                            <option value="2">2</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="rs485-parity">Parity</label>
+                                        <select id="rs485-parity" class="form-control">
+                                            <option value="none">None</option>
+                                            <option value="even">Even</option>
+                                            <option value="odd">Odd</option>
+                                            <option value="mark">Mark</option>
+                                            <option value="space">Space</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="rs485-flow-control">Flow Control</label>
+                                        <select id="rs485-flow-control" class="form-control">
+                                            <option value="none" selected>None</option>
+                                            <option value="rts_cts">RTS/CTS</option>
+                                            <option value="xon_xoff">XON/XOFF</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="rs485-timeout">Timeout (ms)</label>
+                                        <input type="number" id="rs485-timeout" class="form-control" min="0" max="10000" value="1000">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="rs485-direction-control">Direction Control</label>
+                                    <select id="rs485-direction-control" class="form-control">
+                                        <option value="auto" selected>Auto</option>
+                                        <option value="manual">Manual</option>
+                                    </select>
+                                </div>
+                                <hr>
+                                <h4 style="margin-bottom: 15px;">Modbus Ayarları</h4>
+                                <div class="form-group">
+                                    <label style="display: block; margin-bottom: 8px;">Modbus Aktif</label>
+                                    <div class="toggle-switch">
+                                        <input type="checkbox" id="modbus-enabled" class="toggle-input">
+                                        <label for="modbus-enabled" class="toggle-label"></label>
+                                    </div>
+                                </div>
+                                <div id="modbus-settings" style="display: none;">
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="modbus-slave-id">Address/Slave ID</label>
+                                            <input type="number" id="modbus-slave-id" class="form-control" min="1" max="247" value="1">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="modbus-polling-interval">Polling Interval (ms)</label>
+                                            <input type="number" id="modbus-polling-interval" class="form-control" min="100" max="60000" value="1000">
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="modbus-function-codes">Function Codes</label>
+                                        <input type="text" id="modbus-function-codes" class="form-control" placeholder="Örn: 3,4,16" value="3,4">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="modbus-register-map">Register Map</label>
+                                        <textarea id="modbus-register-map" class="form-control" rows="4" placeholder='Örn: {"holding": [0, 100], "input": [0, 50]}'></textarea>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="modbus-data-type">Data Type/Format</label>
+                                            <select id="modbus-data-type" class="form-control">
+                                                <option value="uint16">UINT16</option>
+                                                <option value="int16">INT16</option>
+                                                <option value="uint32">UINT32</option>
+                                                <option value="int32">INT32</option>
+                                                <option value="float">Float</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="modbus-byte-order">Byte/Word Order</label>
+                                            <select id="modbus-byte-order" class="form-control">
+                                                <option value="big_endian" selected>Big Endian</option>
+                                                <option value="little_endian">Little Endian</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="modbus-retry-count">Retry Count</label>
+                                            <input type="number" id="modbus-retry-count" class="form-control" min="0" max="10" value="3">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="modbus-error-handling">Error Handling</label>
+                                            <select id="modbus-error-handling" class="form-control">
+                                                <option value="ignore">Ignore</option>
+                                                <option value="retry" selected>Retry</option>
+                                                <option value="stop">Stop</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button id="save-rs485" class="btn btn-primary">Kaydet</button>
+                                <div id="rs485-message" class="message"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- BLE Section -->
+                    <div id="section-ble" class="section">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>BLE Konfigürasyonu</h3>
+                                <div class="toggle-switch">
+                                    <input type="checkbox" id="ble-enabled" class="toggle-input">
+                                    <label for="ble-enabled" class="toggle-label"></label>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-group">
+                                    <label for="ble-server-mac">Server MAC Adresi</label>
+                                    <input type="text" id="ble-server-mac" class="form-control" placeholder="AA:BB:CC:DD:EE:FF">
+                                </div>
+                                <div class="form-group">
+                                    <label for="ble-service-uuid">Servis UUID</label>
+                                    <input type="text" id="ble-service-uuid" class="form-control" placeholder="0000180f-0000-1000-8000-00805f9b34fb">
+                                </div>
+                                <div class="form-group">
+                                    <label for="ble-characteristic-uuid">Karakteristik UUID</label>
+                                    <input type="text" id="ble-characteristic-uuid" class="form-control" placeholder="00002a19-0000-1000-8000-00805f9b34fb">
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="ble-connection-timeout">Bağlantı Zaman Aşımı (saniye)</label>
+                                        <input type="number" id="ble-connection-timeout" class="form-control" min="1" max="300" value="30">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="ble-scan-interval">BLE Tarama Süresi (saniye)</label>
+                                        <input type="number" id="ble-scan-interval" class="form-control" min="1" max="3600" value="10">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label style="display: block; margin-bottom: 8px;">Otomatik Yeniden Bağlanma</label>
+                                    <div class="toggle-switch">
+                                        <input type="checkbox" id="ble-auto-reconnect" class="toggle-input">
+                                        <label for="ble-auto-reconnect" class="toggle-label"></label>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="ble-operation-mode">Read/Write/Notify Seçimi</label>
+                                    <select id="ble-operation-mode" class="form-control">
+                                        <option value="read">Read</option>
+                                        <option value="write">Write</option>
+                                        <option value="notify">Notify</option>
+                                        <option value="read_write">Read/Write</option>
+                                        <option value="read_notify">Read/Notify</option>
+                                    </select>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="ble-read-interval">Okuma Aralığı (ms)</label>
+                                        <input type="number" id="ble-read-interval" class="form-control" min="100" max="60000" value="1000">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="ble-write-interval">Yazma Aralığı (ms)</label>
+                                        <input type="number" id="ble-write-interval" class="form-control" min="100" max="60000" value="1000">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label style="display: block; margin-bottom: 8px;">Bağlantı Kontrolü</label>
+                                    <div class="toggle-switch">
+                                        <input type="checkbox" id="ble-connection-control" class="toggle-input">
+                                        <label for="ble-connection-control" class="toggle-label"></label>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Bağlı Cihazlar</label>
+                                    <div id="ble-devices" class="device-list">
+                                        <p class="text-muted">Henüz cihaz bulunmuyor</p>
+                                    </div>
+                                </div>
+                                <button id="save-ble" class="btn btn-primary">Kaydet</button>
+                                <div id="ble-message" class="message"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- LoRaWAN Section -->
+                    <div id="section-lorawan" class="section">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>LoRaWAN Konfigürasyonu</h3>
+                                <div class="toggle-switch">
+                                    <input type="checkbox" id="lorawan-enabled" class="toggle-input">
+                                    <label for="lorawan-enabled" class="toggle-label"></label>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-group">
+                                    <label for="lorawan-gateway-id">Gateway ID</label>
+                                    <input type="text" id="lorawan-gateway-id" class="form-control" placeholder="Gateway ID">
+                                </div>
+                                <hr>
+                                <h4 style="margin-bottom: 15px;">Forwarder Ayarları</h4>
+                                <div class="form-group">
+                                    <label for="lorawan-forwarder-type">Forwarder Tipi</label>
+                                    <select id="lorawan-forwarder-type" class="form-control">
+                                        <option value="mqtt" selected>MQTT Forwarder</option>
+                                        <option value="udp">UDP Forwarder</option>
+                                    </select>
+                                </div>
+                                <div id="mqtt-forwarder-settings">
+                                    <div class="form-group">
+                                        <label for="lorawan-mqtt-server">MQTT Server</label>
+                                        <input type="text" id="lorawan-mqtt-server" class="form-control" placeholder="mqtt.example.com">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="lorawan-mqtt-port">MQTT Port</label>
+                                        <input type="number" id="lorawan-mqtt-port" class="form-control" min="1" max="65535" value="1883">
+                                    </div>
+                                </div>
+                                <div id="udp-forwarder-settings" style="display: none;">
+                                    <div class="form-group">
+                                        <label for="lorawan-udp-server">UDP Server</label>
+                                        <input type="text" id="lorawan-udp-server" class="form-control" placeholder="192.168.1.100">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="lorawan-udp-port">UDP Port</label>
+                                        <input type="number" id="lorawan-udp-port" class="form-control" min="1" max="65535" value="1700">
+                                    </div>
+                                </div>
+                                <button id="save-lorawan" class="btn btn-primary">Kaydet</button>
+                                <div id="lorawan-message" class="message"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- WiFi Section -->
+                    <div id="section-wifi" class="section">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>WiFi Ayarları</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-group">
+                                    <button id="scan-wifi" class="btn btn-secondary">WiFi Ağlarını Tara</button>
+                                </div>
+                                <div class="form-group">
+                                    <label>Bulunan WiFi Ağları</label>
+                                    <div id="wifi-networks" class="device-list">
+                                        <p class="text-muted">WiFi ağlarını taramak için yukarıdaki butona tıklayın</p>
+                                    </div>
+                                </div>
+                                <hr>
+                                <h4 style="margin-bottom: 15px;">WiFi Bağlantı Ayarları</h4>
+                                <div class="form-group">
+                                    <label for="wifi-country">Ülke</label>
+                                    <select id="wifi-country" class="form-control">
+                                        <option value="TR" selected>Türkiye</option>
+                                        <option value="US">ABD</option>
+                                        <option value="GB">İngiltere</option>
+                                        <option value="DE">Almanya</option>
+                                        <option value="FR">Fransa</option>
+                                        <option value="IT">İtalya</option>
+                                        <option value="ES">İspanya</option>
+                                        <option value="NL">Hollanda</option>
+                                        <option value="BE">Belçika</option>
+                                        <option value="CH">İsviçre</option>
+                                        <option value="AT">Avusturya</option>
+                                        <option value="SE">İsveç</option>
+                                        <option value="NO">Norveç</option>
+                                        <option value="DK">Danimarka</option>
+                                        <option value="FI">Finlandiya</option>
+                                        <option value="PL">Polonya</option>
+                                        <option value="CZ">Çek Cumhuriyeti</option>
+                                        <option value="GR">Yunanistan</option>
+                                        <option value="PT">Portekiz</option>
+                                        <option value="IE">İrlanda</option>
+                                        <option value="JP">Japonya</option>
+                                        <option value="CN">Çin</option>
+                                        <option value="KR">Güney Kore</option>
+                                        <option value="AU">Avustralya</option>
+                                        <option value="CA">Kanada</option>
+                                        <option value="MX">Meksika</option>
+                                        <option value="BR">Brezilya</option>
+                                        <option value="AR">Arjantin</option>
+                                        <option value="IN">Hindistan</option>
+                                        <option value="RU">Rusya</option>
+                                        <option value="ZA">Güney Afrika</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="wifi-ssid">SSID</label>
+                                    <input type="text" id="wifi-ssid" class="form-control" placeholder="WiFi ağ adı">
+                                </div>
+                                <div class="form-group">
+                                    <label for="wifi-password">Şifre</label>
+                                    <input type="password" id="wifi-password" class="form-control" placeholder="WiFi şifresi">
+                                </div>
+                                <button id="save-wifi" class="btn btn-primary">WiFi Bağlantısını Kaydet</button>
+                                <div id="wifi-message" class="message"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- System Section -->
+                    <div id="section-system" class="section">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Sistem Ayarları</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-group">
+                                    <label for="gateway-name">Gateway Adı</label>
+                                    <input type="text" id="gateway-name" class="form-control" value="Gateway-01">
+                                </div>
+                                <button id="save-system" class="btn btn-primary">Kaydet</button>
+                                <div id="system-message" class="message"></div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Şifre Değiştirme</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-group">
+                                    <label for="current-password">Mevcut Şifre</label>
+                                    <input type="password" id="current-password" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label for="new-password">Yeni Şifre</label>
+                                    <input type="password" id="new-password" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label for="confirm-password">Yeni Şifre (Tekrar)</label>
+                                    <input type="password" id="confirm-password" class="form-control">
+                                </div>
+                                <button id="change-password" class="btn btn-primary">Şifreyi Değiştir</button>
+                                <div id="password-message" class="message"></div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Gateway İşlemleri</h3>
+                            </div>
+                            <div class="card-body">
+                                <button id="restart-gateway" class="btn btn-danger">Gateway'i Yeniden Başlat</button>
+                                <p class="text-muted" style="margin-top: 10px;">
+                                    Bu işlem gateway'i yeniden başlatacaktır.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+{
+  "gateway_name": "Gateway-01",
+  "rs485": {
+    "enabled": false,
+    "baudrate": 9600,
+    "parity": "none",
+    "slave_id": 1
+  },
+  "ble": {
+    "enabled": false,
+    "scan_interval": 10,
+    "devices": []
+  },
+  "lorawan": {
+    "enabled": false,
+    "mode": "OTAA",
+    "dev_eui": "",
+    "app_eui": "",
+    "app_key": ""
+  },
+  "wifi": {
+    "networks": [
+      {
+        "ssid": "TestWiFi",
+        "signal": 85,
+        "encrypted": true
+      },
+      {
+        "ssid": "OpenNetwork",
+        "signal": 60,
+        "encrypted": false
+      },
+      {
+        "ssid": "HomeWiFi",
+        "signal": 90,
+        "encrypted": true
+      }
+    ]
+  }
+}
