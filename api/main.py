@@ -117,6 +117,7 @@ def load_gateway_config():
                 "mqtt_topic": "",
                 "mqtt_access_token": "",
                 "https_server": "",
+                "https_port": 443,
                 "https_endpoint": "",
                 "https_access_token": "",
                 "devices": []
@@ -341,11 +342,8 @@ def scan_wifi_networks():
         
         # Her iki yöntem de başarısız olduysa boş liste döndür
         if not networks:
-            print("WiFi tarama başarısız. Mock data döndürülüyor.")
-            # Fallback: Mock data (geliştirme için)
-            return [
-                {"ssid": "WiFi tarama başarısız", "signal": 0, "encrypted": False}
-            ]
+            print("WiFi tarama başarısız. Boş liste döndürülüyor.")
+            return []
         
         return networks
         
@@ -404,6 +402,7 @@ class BLEConfig(BaseModel):
     mqtt_topic: Optional[str] = ""
     mqtt_access_token: Optional[str] = ""
     https_server: Optional[str] = ""
+    https_port: Optional[int] = 443
     https_endpoint: Optional[str] = ""
     https_access_token: Optional[str] = ""
     devices: Optional[List[str]] = []

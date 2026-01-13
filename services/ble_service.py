@@ -401,6 +401,7 @@ class BLEService:
         """Veriyi HTTPS üzerinden gönder"""
         try:
             https_server = self.config.get('https_server', '')
+            https_port = self.config.get('https_port', 443)
             https_endpoint = self.config.get('https_endpoint', '/api/v1/telemetry')
             access_token = self.config.get('https_access_token', '')
             
@@ -408,8 +409,16 @@ class BLEService:
                 logger.warning("HTTPS server belirtilmemiş")
                 return False
             
-            # URL oluştur
-            url = f"{https_server.rstrip('/')}{https_endpoint}"
+            # URL oluştur (port varsa ekle)
+            server = https_server.rstrip('/')
+            # Eğer server'da zaten port varsa (örn: api.example.com:8443) kullan, yoksa port ekle
+            if ':' not in server.split('/')[-1]:
+                if https_port != 443:  # 443 varsayılan HTTPS portu, eklemeye gerek yok
+                    url = f"https://{server}:{https_port}{https_endpoint}"
+                else:
+                    url = f"https://{server}{https_endpoint}"
+            else:
+                url = f"https://{server}{https_endpoint}"
             
             # Headers
             headers = {

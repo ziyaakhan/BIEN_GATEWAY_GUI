@@ -233,6 +233,7 @@ async function loadConfig() {
             if (config.ble.mqtt_topic) document.getElementById('ble-mqtt-topic').value = config.ble.mqtt_topic;
             if (config.ble.mqtt_access_token) document.getElementById('ble-mqtt-access-token').value = config.ble.mqtt_access_token;
             if (config.ble.https_server) document.getElementById('ble-https-server').value = config.ble.https_server;
+            if (config.ble.https_port) document.getElementById('ble-https-port').value = config.ble.https_port;
             if (config.ble.https_endpoint) document.getElementById('ble-https-endpoint').value = config.ble.https_endpoint;
             if (config.ble.https_access_token) document.getElementById('ble-https-access-token').value = config.ble.https_access_token;
             
@@ -265,9 +266,7 @@ async function loadConfig() {
         if (config.wifi) {
             if (config.wifi.country) document.getElementById('wifi-country').value = config.wifi.country;
             if (config.wifi.ssid) document.getElementById('wifi-ssid').value = config.wifi.ssid;
-            if (config.wifi.networks && config.wifi.networks.length > 0) {
-                updateWiFiNetworks(config.wifi.networks);
-            }
+            // WiFi ağları sadece tarama yapıldığında gösterilir, başlangıçta gösterilmez
         }
 
         // System
@@ -399,6 +398,7 @@ function setupBLE() {
             config.mqtt_access_token = document.getElementById('ble-mqtt-access-token').value;
         } else {
             config.https_server = document.getElementById('ble-https-server').value;
+            config.https_port = parseInt(document.getElementById('ble-https-port').value) || 443;
             config.https_endpoint = document.getElementById('ble-https-endpoint').value;
             config.https_access_token = document.getElementById('ble-https-access-token').value;
         }
