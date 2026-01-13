@@ -325,6 +325,49 @@
                                         <label for="ble-connection-control" class="toggle-label"></label>
                                     </div>
                                 </div>
+                                <hr>
+                                <h4 style="margin-bottom: 15px;">Veri İletim Ayarları</h4>
+                                <div class="form-group">
+                                    <label for="ble-forwarder-type">İletim Tipi</label>
+                                    <select id="ble-forwarder-type" class="form-control">
+                                        <option value="mqtt" selected>MQTT</option>
+                                        <option value="https">HTTPS</option>
+                                    </select>
+                                </div>
+                                <div id="ble-mqtt-settings">
+                                    <div class="form-group">
+                                        <label for="ble-mqtt-server">MQTT Server</label>
+                                        <input type="text" id="ble-mqtt-server" class="form-control" placeholder="mqtt.example.com">
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="ble-mqtt-port">MQTT Port</label>
+                                            <input type="number" id="ble-mqtt-port" class="form-control" min="1" max="65535" value="1883">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="ble-mqtt-topic">MQTT Topic</label>
+                                            <input type="text" id="ble-mqtt-topic" class="form-control" placeholder="gateway/ble/data">
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="ble-mqtt-access-token">Access Token</label>
+                                        <input type="text" id="ble-mqtt-access-token" class="form-control" placeholder="Access token">
+                                    </div>
+                                </div>
+                                <div id="ble-https-settings" style="display: none;">
+                                    <div class="form-group">
+                                        <label for="ble-https-server">HTTPS Server</label>
+                                        <input type="text" id="ble-https-server" class="form-control" placeholder="https://api.example.com">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="ble-https-endpoint">Endpoint</label>
+                                        <input type="text" id="ble-https-endpoint" class="form-control" placeholder="/api/v1/telemetry">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="ble-https-access-token">Access Token</label>
+                                        <input type="text" id="ble-https-access-token" class="form-control" placeholder="Access token">
+                                    </div>
+                                </div>
                                 <div class="form-group">
                                     <label>Bağlı Cihazlar</label>
                                     <div id="ble-devices" class="device-list">

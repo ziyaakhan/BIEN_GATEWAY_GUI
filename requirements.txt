@@ -12,11 +12,16 @@ pyserial>=3.5
 # Modbus (opsiyonel - RS-485 Modbus için)
 # pymodbus>=3.5.0
 
-# BLE (opsiyonel - BLE için)
-# bluepy>=1.3.0
+# BLE (Raspberry Pi için - bluepy önerilir)
+bluepy>=1.3.0
+# Alternatif: bleak (cross-platform, async)
+# bleak>=0.21.0
 
-# LoRaWAN (opsiyonel - LoRaWAN için)
-# paho-mqtt>=1.6.0
+# MQTT (BLE ve LoRaWAN için)
+paho-mqtt>=1.6.0
+
+# HTTP/HTTPS istekleri için
+requests>=2.31.0
 
 # JSON işlemleri için (Python standart kütüphanesi ile gelir, ama jq benzeri için)
 # jq>=1.0.0

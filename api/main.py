@@ -108,6 +108,14 @@ def load_gateway_config():
                 "read_interval": 1000,
                 "write_interval": 1000,
                 "connection_control": False,
+                "forwarder_type": "mqtt",
+                "mqtt_server": "",
+                "mqtt_port": 1883,
+                "mqtt_topic": "",
+                "mqtt_access_token": "",
+                "https_server": "",
+                "https_endpoint": "",
+                "https_access_token": "",
                 "devices": []
             },
             "lorawan": {
@@ -225,6 +233,14 @@ class BLEConfig(BaseModel):
     read_interval: Optional[int] = 1000
     write_interval: Optional[int] = 1000
     connection_control: Optional[bool] = False
+    forwarder_type: Optional[str] = "mqtt"  # mqtt or https
+    mqtt_server: Optional[str] = ""
+    mqtt_port: Optional[int] = 1883
+    mqtt_topic: Optional[str] = ""
+    mqtt_access_token: Optional[str] = ""
+    https_server: Optional[str] = ""
+    https_endpoint: Optional[str] = ""
+    https_access_token: Optional[str] = ""
     devices: Optional[List[str]] = []
 
 

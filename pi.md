@@ -108,6 +108,196 @@ which python  # /opt/gateway/venv/bin/python göstermeli
 pip list | grep -E "fastapi|uvicorn|watchdog|pyserial"
 ```
 
+### 1.5. Manuel Test (Servise Eklemeden Önce)
+
+Servise eklemeden önce uygulamayı manuel olarak başlatıp test edebilirsiniz:
+
+```bash
+cd /opt/gateway
+
+# Sanal ortamı aktifleştir (eğer aktif değilse)
+source venv/bin/activate
+
+# Uygulamayı başlat
+uvicorn api.main:app --host 0.0.0.0 --port 8000
+
+# Veya daha detaylı log ile:
+uvicorn api.main:app --host 0.0.0.0 --port 8000 --log-level debug --reload
+```
+
+**Test Adımları:**
+
+1. **Tarayıcıdan Test:**
+   ```bash
+   # Raspberry Pi'nin IP adresini öğren
+   hostname -I
+   # veya
+   ip addr show wlan0 | grep "inet "
+   ```
+   
+   Tarayıcıdan şu adrese gidin:
+   ```
+   http://RASPBERRY_PI_IP:8000
+   ```
+   
+   Örnek: `http://192.168.1.100:8000`
+
+2. **API Endpoint'lerini Test Etme:**
+   
+   Başka bir terminal açın ve:
+   ```bash
+   # Health check
+   curl http://localhost:8000/api/health
+   
+   # Login testi
+   curl -X POST http://localhost:8000/api/login \
+     -H "Content-Type: application/json" \
+     -d '{"username":"admin","password":"admin"}' \
+     -c cookies.txt
+   
+   # Config okuma (login sonrası)
+   curl http://localhost:8000/api/config -b cookies.txt
+   ```
+
+3. **Hata Kontrolü:**
+   
+   Terminal'de hata mesajları görünecektir. Örnek hatalar:
+   - Port zaten kullanılıyor: `Address already in use` → Başka bir servis 8000 portunu kullanıyor
+   - Modül bulunamadı: `ModuleNotFoundError` → `pip install -r requirements.txt` çalıştırın
+   - Dosya bulunamadı: `FileNotFoundError` → Dosya yollarını kontrol edin
+
+4. **Durdurma:**
+   
+   Çalışan uygulamayı durdurmak için terminal'de `Ctrl+C` tuşlarına basın.
+
+5. **Arka Planda Çalıştırma (Test için):**
+   
+   Eğer terminal'i kapatmak istiyorsanız ama uygulama çalışmaya devam etsin:
+   ```bash
+   # Arka planda başlat
+   nohup uvicorn api.main:app --host 0.0.0.0 --port 8000 > gateway.log 2>&1 &
+   
+   # Process ID'yi kaydet
+   echo $! > gateway.pid
+   
+   # Logları görüntüle
+   tail -f gateway.log
+   
+   # Durdurma
+   kill $(cat gateway.pid)
+   ```
+
+**Test Checklist:**
+
+- [ ] Uygulama başladı mı? (Terminal'de "Application startup complete" mesajı görünmeli)
+- [ ] Tarayıcıdan login ekranı açılıyor mu?
+- [ ] Login yapabiliyor musunuz? (admin/admin)
+- [ ] Tüm menü bölümleri görünüyor mu?
+- [ ] Ayarları kaydedebiliyor musunuz?
+- [ ] API endpoint'leri çalışıyor mu?
+
+**Sorun Giderme:**
+
+- **Port 8000 kullanımda (Address already in use):** 
+  
+  Bu hata, port 8000'in başka bir process tarafından kullanıldığını gösterir. Çözüm:
+  
+  ```bash
+  # 1. Hangi process kullanıyor kontrol et
+  sudo lsof -i :8000
+  # veya
+  sudo netstat -tulpn | grep 8000
+  # veya
+  sudo ss -tulpn | grep :8000
+  ```
+  
+  Çıktı örneği:
+  ```
+  COMMAND   PID USER   FD   TYPE DEVICE SIZE/OFF NODE NAME
+  python3  1234  pi    3u  IPv4  12345      0t0  TCP *:8000 (LISTEN)
+  ```
+  
+  **Çözüm Seçenekleri:**
+  
+  **Seçenek 1: Çalışan process'i durdur**
+  ```bash
+  # Process ID'yi bul (yukarıdaki komuttan, örnek: 1234)
+  sudo kill 1234
+  
+  # Veya zorla durdur
+  sudo kill -9 1234
+  
+  # Tekrar başlat
+  uvicorn api.main:app --host 0.0.0.0 --port 8000
+  ```
+  
+  **Seçenek 2: Tüm Python/uvicorn process'lerini durdur**
+  ```bash
+  # Tüm uvicorn process'lerini bul ve durdur
+  pkill -f uvicorn
+  
+  # Veya tüm Python process'lerini (dikkatli kullanın!)
+  # pkill python3
+  
+  # Tekrar başlat
+  uvicorn api.main:app --host 0.0.0.0 --port 8000
+  ```
+  
+  **Seçenek 3: Farklı port kullan**
+  ```bash
+  # Port 8001 kullan
+  uvicorn api.main:app --host 0.0.0.0 --port 8001
+  ```
+  
+  **Seçenek 4: Servis çalışıyorsa durdur**
+  ```bash
+  # Eğer servis olarak kurulduysa
+  sudo systemctl stop gateway-api.service
+  
+  # Servis durumunu kontrol et
+  sudo systemctl status gateway-api.service
+  
+  # Servisi devre dışı bırak (manuel test için)
+  sudo systemctl disable gateway-api.service
+  ```
+  
+  **Hızlı Çözüm (Tüm seçenekleri birleştiren script):**
+  ```bash
+  # Port 8000'i kullanan process'i bul ve durdur
+  sudo lsof -ti :8000 | xargs sudo kill -9 2>/dev/null || true
+  
+  # Uvicorn process'lerini durdur
+  pkill -f uvicorn 2>/dev/null || true
+  
+  # Kısa bir bekleme
+  sleep 2
+  
+  # Tekrar başlat
+  cd /opt/gateway
+  source venv/bin/activate
+  uvicorn api.main:app --host 0.0.0.0 --port 8000
+  ```
+
+- **Permission denied:**
+  ```bash
+  # Dosya izinlerini kontrol et
+  ls -la /opt/gateway/
+  
+  # Gerekirse sahipliği değiştir
+  sudo chown -R pi:pi /opt/gateway
+  ```
+
+- **ModuleNotFoundError:**
+  ```bash
+  # Sanal ortam aktif mi kontrol et
+  which python  # /opt/gateway/venv/bin/python olmalı
+  
+  # Paketleri tekrar kur
+  pip install -r requirements.txt
+  ```
+
+Manuel test başarılı olduktan sonra servise ekleyebilirsiniz.
+
 ### 1.3. Sistem Servisi Olarak Çalıştırma
 
 ```bash
@@ -561,9 +751,91 @@ def apply_modbus_config(modbus_config, serial_port):
 
 ### 4.3. BLE Ayarlarını Uygulama
 
+BLE servisi için özel bir Python scripti oluşturulmuştur: `services/ble_service.py`
+
+**BLE Servisi Kurulumu:**
+
+```bash
+cd /opt/gateway
+
+# BLE kütüphanesini kur (bluepy - Raspberry Pi için önerilir)
+pip install bluepy
+
+# Alternatif: bleak (cross-platform, async)
+# pip install bleak
+
+# Script'i çalıştırılabilir yap
+chmod +x services/ble_service.py
+```
+
+**BLE Servisini Manuel Test:**
+
+```bash
+cd /opt/gateway
+source venv/bin/activate
+
+# Servisi başlat
+python3 services/ble_service.py
+```
+
+**BLE Servisini Systemd Servisi Olarak Çalıştırma:**
+
+```bash
+# Servis dosyası oluştur
+sudo nano /etc/systemd/system/gateway-ble.service
+```
+
+Servis dosyası içeriği:
+
+```ini
+[Unit]
+Description=Gateway BLE Service
+After=network.target bluetooth.target
+Requires=bluetooth.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/gateway
+Environment="PATH=/opt/gateway/venv/bin"
+ExecStart=/opt/gateway/venv/bin/python3 /opt/gateway/services/ble_service.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Servisi başlat:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable gateway-ble.service
+sudo systemctl start gateway-ble.service
+
+# Durumu kontrol et
+sudo systemctl status gateway-ble.service
+
+# Logları görüntüle
+sudo journalctl -u gateway-ble.service -f
+# veya
+tail -f /opt/gateway/logs/ble_service.log
+```
+
+**BLE Servisi Özellikleri:**
+
+- ✅ Otomatik cihaz tarama
+- ✅ Server MAC adresine otomatik bağlanma
+- ✅ Read/Write/Notify operasyonları
+- ✅ Otomatik yeniden bağlanma
+- ✅ Periyodik okuma/yazma
+- ✅ Konfigürasyon değişikliklerini otomatik algılama
+
+**Python ile BLE Ayarlarını Uygulama:**
+
 ```python
 import subprocess
-import time
+import json
 
 def apply_ble_config(ble_config):
     """BLE ayarlarını uygula"""
@@ -572,37 +844,62 @@ def apply_ble_config(ble_config):
     if not enabled:
         print("BLE devre dışı")
         # BLE servisini durdur
-        subprocess.run(['sudo', 'systemctl', 'stop', 'ble-service'], check=False)
+        subprocess.run(['sudo', 'systemctl', 'stop', 'gateway-ble.service'], check=False)
         return
     
-    # BLE servisini başlat
-    subprocess.run(['sudo', 'systemctl', 'start', 'ble-service'], check=False)
-    
-    server_mac = ble_config.get('server_mac')
-    service_uuid = ble_config.get('service_uuid')
-    characteristic_uuid = ble_config.get('characteristic_uuid')
-    
-    # BLE konfigürasyon dosyasını güncelle
-    ble_service_config = {
-        'server_mac': server_mac,
-        'service_uuid': service_uuid,
-        'characteristic_uuid': characteristic_uuid,
-        'connection_timeout': ble_config.get('connection_timeout', 30),
-        'scan_interval': ble_config.get('scan_interval', 10),
-        'auto_reconnect': ble_config.get('auto_reconnect', False),
-        'operation_mode': ble_config.get('operation_mode', 'read'),
-        'read_interval': ble_config.get('read_interval', 1000),
-        'write_interval': ble_config.get('write_interval', 1000)
-    }
-    
-    with open('/opt/gateway/config/ble_service.json', 'w') as f:
-        json.dump(ble_service_config, f, indent=2)
-    
-    # BLE servisini yeniden başlat
-    subprocess.run(['sudo', 'systemctl', 'restart', 'ble-service'], check=False)
+    # BLE servisini başlat/yeniden başlat
+    # Konfigürasyon gateway.json'da olduğu için servis otomatik okuyacak
+    subprocess.run(['sudo', 'systemctl', 'restart', 'gateway-ble.service'], check=False)
     
     print("BLE ayarları uygulandı")
 ```
+
+**Bluetooth Donanım Kontrolü:**
+
+```bash
+# Bluetooth servisini kontrol et
+sudo systemctl status bluetooth
+
+# Bluetooth'u aktifleştir
+sudo systemctl start bluetooth
+sudo systemctl enable bluetooth
+
+# Bluetooth adaptörünü kontrol et
+hciconfig
+# veya
+bluetoothctl show
+
+# Bluetooth cihazlarını tarama (test için)
+bluetoothctl scan on
+```
+
+**Sorun Giderme:**
+
+- **Bluetooth adaptörü bulunamadı:**
+  ```bash
+  # Adaptörü kontrol et
+  hciconfig
+  
+  # Adaptörü resetle
+  sudo hciconfig hci0 reset
+  ```
+
+- **Permission denied hatası:**
+  ```bash
+  # pi kullanıcısını bluetooth grubuna ekle
+  sudo usermod -aG bluetooth pi
+  
+  # Yeniden login gerekebilir
+  ```
+
+- **bluepy kurulum hatası:**
+  ```bash
+  # Gerekli sistem paketlerini kur
+  sudo apt install -y libbluetooth-dev
+  
+  # Tekrar kur
+  pip install bluepy
+  ```
 
 ### 4.4. LoRaWAN Ayarlarını Uygulama
 

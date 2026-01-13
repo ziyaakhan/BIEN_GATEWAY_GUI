@@ -224,6 +224,18 @@ async function loadConfig() {
             if (config.ble.write_interval) document.getElementById('ble-write-interval').value = config.ble.write_interval;
             document.getElementById('ble-connection-control').checked = config.ble.connection_control || false;
             
+            if (config.ble.forwarder_type) {
+                document.getElementById('ble-forwarder-type').value = config.ble.forwarder_type;
+                toggleBLEForwarderSettings(config.ble.forwarder_type);
+            }
+            if (config.ble.mqtt_server) document.getElementById('ble-mqtt-server').value = config.ble.mqtt_server;
+            if (config.ble.mqtt_port) document.getElementById('ble-mqtt-port').value = config.ble.mqtt_port;
+            if (config.ble.mqtt_topic) document.getElementById('ble-mqtt-topic').value = config.ble.mqtt_topic;
+            if (config.ble.mqtt_access_token) document.getElementById('ble-mqtt-access-token').value = config.ble.mqtt_access_token;
+            if (config.ble.https_server) document.getElementById('ble-https-server').value = config.ble.https_server;
+            if (config.ble.https_endpoint) document.getElementById('ble-https-endpoint').value = config.ble.https_endpoint;
+            if (config.ble.https_access_token) document.getElementById('ble-https-access-token').value = config.ble.https_access_token;
+            
             // Update BLE device list
             const deviceList = document.getElementById('ble-devices');
             if (config.ble.devices && config.ble.devices.length > 0) {
@@ -341,10 +353,29 @@ async function saveModbusConfig() {
 // BLE Configuration
 // ============================================================================
 
+function toggleBLEForwarderSettings(type) {
+    const mqttSettings = document.getElementById('ble-mqtt-settings');
+    const httpsSettings = document.getElementById('ble-https-settings');
+    
+    if (type === 'mqtt') {
+        mqttSettings.style.display = 'block';
+        httpsSettings.style.display = 'none';
+    } else {
+        mqttSettings.style.display = 'none';
+        httpsSettings.style.display = 'block';
+    }
+}
+
 function setupBLE() {
     const saveBtn = document.getElementById('save-ble');
+    const forwarderType = document.getElementById('ble-forwarder-type');
+    
+    forwarderType.addEventListener('change', (e) => {
+        toggleBLEForwarderSettings(e.target.value);
+    });
     
     saveBtn.addEventListener('click', async () => {
+        const forwarderTypeValue = forwarderType.value;
         const config = {
             enabled: document.getElementById('ble-enabled').checked,
             server_mac: document.getElementById('ble-server-mac').value,
@@ -357,8 +388,20 @@ function setupBLE() {
             read_interval: parseInt(document.getElementById('ble-read-interval').value),
             write_interval: parseInt(document.getElementById('ble-write-interval').value),
             connection_control: document.getElementById('ble-connection-control').checked,
+            forwarder_type: forwarderTypeValue,
             devices: [] // Device list is read-only for now
         };
+
+        if (forwarderTypeValue === 'mqtt') {
+            config.mqtt_server = document.getElementById('ble-mqtt-server').value;
+            config.mqtt_port = parseInt(document.getElementById('ble-mqtt-port').value);
+            config.mqtt_topic = document.getElementById('ble-mqtt-topic').value;
+            config.mqtt_access_token = document.getElementById('ble-mqtt-access-token').value;
+        } else {
+            config.https_server = document.getElementById('ble-https-server').value;
+            config.https_endpoint = document.getElementById('ble-https-endpoint').value;
+            config.https_access_token = document.getElementById('ble-https-access-token').value;
+        }
 
         try {
             const result = await apiCall('/config/ble', 'POST', config);
