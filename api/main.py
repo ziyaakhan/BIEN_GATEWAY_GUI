@@ -529,50 +529,64 @@ def scan_ble_devices():
     devices = []
     
     try:
-        # bluetoothctl kullanarak tarama
-        result = subprocess.run(
-            ['bluetoothctl', 'scan', 'on'],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False
-        )
-        
-        # Biraz bekle (cihazların bulunması için)
-        time.sleep(5)
-        
-        # Taramayı durdur
-        subprocess.run(['bluetoothctl', 'scan', 'off'], capture_output=True, check=False)
-        
-        # Cihazları listele
-        result = subprocess.run(
-            ['bluetoothctl', 'devices'],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            check=False
-        )
-        
-        if result.returncode == 0 and result.stdout.strip():
-            seen_macs = set()
-            for line in result.stdout.strip().split('\n'):
-                if 'Device' in line:
-                    parts = line.split(' ', 1)
-                    if len(parts) >= 2:
-                        mac = parts[1].split()[0]
-                        name = ' '.join(parts[1].split()[1:]) if len(parts[1].split()) > 1 else mac
-                        
-                        if mac and mac not in seen_macs:
-                            seen_macs.add(mac)
-                            devices.append({
-                                'mac': mac,
-                                'name': name,
-                                'service_uuid': '',  # bluetoothctl ile UUID almak için ek komut gerekir
-                                'characteristic_uuid': ''
-                            })
+        # Önce bluetoothctl ile dene
+        try:
+            # bluetoothctl scan on (background'da çalışır)
+            scan_process = subprocess.Popen(
+                ['bluetoothctl', 'scan', 'on'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            # Biraz bekle (cihazların bulunması için)
+            time.sleep(8)
+            
+            # Taramayı durdur
+            subprocess.run(['bluetoothctl', 'scan', 'off'], 
+                         capture_output=True, timeout=3, check=False)
+            scan_process.terminate()
+            scan_process.wait(timeout=2)
+            
+            # Cihazları listele
+            result = subprocess.run(
+                ['bluetoothctl', 'devices'],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False
+            )
+            
+            if result.returncode == 0 and result.stdout.strip():
+                seen_macs = set()
+                for line in result.stdout.strip().split('\n'):
+                    if 'Device' in line:
+                        parts = line.split(' ', 1)
+                        if len(parts) >= 2:
+                            mac = parts[1].split()[0]
+                            name = ' '.join(parts[1].split()[1:]) if len(parts[1].split()) > 1 else mac
+                            
+                            if mac and mac not in seen_macs and ':' in mac:
+                                seen_macs.add(mac)
+                                devices.append({
+                                    'mac': mac,
+                                    'name': name,
+                                    'service_uuid': '',  # bluetoothctl ile UUID almak için ek komut gerekir
+                                    'characteristic_uuid': ''
+                                })
+            
+            if devices:
+                return devices
+                
+        except FileNotFoundError:
+            print("bluetoothctl bulunamadı")
+        except subprocess.TimeoutExpired:
+            print("bluetoothctl tarama zaman aşımına uğradı")
+        except Exception as e:
+            print(f"bluetoothctl tarama hatası: {e}")
         
         # Eğer bluetoothctl başarısız olduysa, hcitool ile dene
-        if not devices:
+        try:
             result = subprocess.run(
                 ['sudo', 'hcitool', 'lescan', '--duplicates'],
                 capture_output=True,
@@ -581,16 +595,16 @@ def scan_ble_devices():
                 check=False
             )
             
-            if result.returncode == 0 and result.stdout.strip():
+            if result.stdout and result.stdout.strip():
                 seen_macs = set()
                 for line in result.stdout.strip().split('\n'):
-                    if line.strip():
+                    if line.strip() and not line.startswith('LE Scan'):
                         parts = line.split()
                         if len(parts) >= 1:
                             mac = parts[0]
                             name = ' '.join(parts[1:]) if len(parts) > 1 else mac
                             
-                            if mac and mac not in seen_macs and ':' in mac:
+                            if mac and mac not in seen_macs and ':' in mac and len(mac) == 17:
                                 seen_macs.add(mac)
                                 devices.append({
                                     'mac': mac,
@@ -598,13 +612,34 @@ def scan_ble_devices():
                                     'service_uuid': '',
                                     'characteristic_uuid': ''
                                 })
+            
+            if devices:
+                return devices
+                
+        except FileNotFoundError:
+            print("hcitool bulunamadı. BLE tarama için bluetoothctl veya hcitool gerekli.")
+        except subprocess.TimeoutExpired:
+            print("hcitool tarama zaman aşımına uğradı")
+        except Exception as e:
+            print(f"hcitool tarama hatası: {e}")
         
-    except FileNotFoundError:
-        print("bluetoothctl veya hcitool bulunamadı. BLE tarama için gerekli.")
-    except subprocess.TimeoutExpired:
-        print("BLE tarama zaman aşımına uğradı")
+        # Windows'ta test için mock data (geliştirme ortamı)
+        import platform
+        if platform.system() == 'Windows':
+            print("Windows ortamında - mock BLE cihazları döndürülüyor")
+            return [
+                {
+                    'mac': 'AA:BB:CC:DD:EE:FF',
+                    'name': 'Mock BLE Device',
+                    'service_uuid': '',
+                    'characteristic_uuid': ''
+                }
+            ]
+        
     except Exception as e:
-        print(f"BLE tarama hatası: {e}")
+        print(f"BLE tarama genel hatası: {e}")
+        import traceback
+        traceback.print_exc()
     
     return devices
 
@@ -834,9 +869,14 @@ async def scan_ble(request: Request):
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
-    devices = scan_ble_devices()
-    
-    return {"status": "success", "devices": devices}
+    try:
+        devices = scan_ble_devices()
+        return {"status": "success", "devices": devices}
+    except Exception as e:
+        print(f"BLE tarama hatası: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"BLE tarama başarısız: {str(e)}")
 
 
 @app.post("/api/config/lorawan")

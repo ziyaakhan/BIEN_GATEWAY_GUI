@@ -37,10 +37,17 @@ async function apiCall(endpoint, method = 'GET', data = null, isLogin = false) {
             }
         }
 
+        // Content-Type kontrolü
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            const text = await response.text();
+            throw new Error(`Beklenmeyen yanıt formatı: ${text.substring(0, 100)}`);
+        }
+        
         const result = await response.json();
         
         if (!response.ok) {
-            throw new Error(result.detail || 'Request failed');
+            throw new Error(result.detail || result.message || 'Request failed');
         }
 
         return result;
@@ -329,29 +336,47 @@ let currentTelemetryItems = [];
 
 function updateBLEScannedDevices(devices) {
     const devicesList = document.getElementById('ble-scanned-devices');
+    if (!devicesList) {
+        console.error('ble-scanned-devices elementi bulunamadı');
+        return;
+    }
+    
     if (devices && devices.length > 0) {
-        devicesList.innerHTML = devices.map(device => 
-            `<div class="device-item" style="cursor: pointer; padding: 10px; margin-bottom: 5px; border: 1px solid #e1e8ed; border-radius: 4px;" onclick="selectBLEDevice('${device.mac}', '${device.service_uuid || ''}', '${device.characteristic_uuid || ''}')">
-                <strong>${device.name || device.mac}</strong><br>
-                MAC: ${device.mac}<br>
-                ${device.service_uuid ? `Service: ${device.service_uuid}<br>` : ''}
-                ${device.characteristic_uuid ? `Characteristic: ${device.characteristic_uuid}` : ''}
-            </div>`
-        ).join('');
+        devicesList.innerHTML = devices.map(device => {
+            // XSS koruması için escape
+            const mac = (device.mac || '').replace(/'/g, "\\'");
+            const name = (device.name || device.mac || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const serviceUuid = (device.service_uuid || '').replace(/'/g, "\\'");
+            const charUuid = (device.characteristic_uuid || '').replace(/'/g, "\\'");
+            
+            return `<div class="device-item" style="cursor: pointer; padding: 10px; margin-bottom: 5px; border: 1px solid #e1e8ed; border-radius: 4px;" onclick="selectBLEDevice('${mac}', '${serviceUuid}', '${charUuid}')">
+                <strong>${name}</strong><br>
+                MAC: ${mac}<br>
+                ${serviceUuid ? `Service: ${serviceUuid}<br>` : ''}
+                ${charUuid ? `Characteristic: ${charUuid}` : ''}
+            </div>`;
+        }).join('');
     } else {
         devicesList.innerHTML = '<p class="text-muted">BLE cihazı bulunamadı</p>';
     }
 }
 
-function selectBLEDevice(mac, serviceUuid, characteristicUuid) {
-    document.getElementById('ble-profile-mac').value = mac;
-    if (serviceUuid) {
-        document.getElementById('ble-profile-service-uuid').value = serviceUuid;
+// Global scope'ta olmalı (HTML onclick için)
+window.selectBLEDevice = function(mac, serviceUuid, characteristicUuid) {
+    const macInput = document.getElementById('ble-profile-mac');
+    const serviceInput = document.getElementById('ble-profile-service-uuid');
+    const charInput = document.getElementById('ble-profile-characteristic-uuid');
+    
+    if (macInput) macInput.value = mac || '';
+    if (serviceInput && serviceUuid) serviceInput.value = serviceUuid;
+    if (charInput && characteristicUuid) charInput.value = characteristicUuid;
+    
+    // Profil formunu göster
+    const profileForm = document.getElementById('ble-profile-form');
+    if (profileForm) {
+        profileForm.style.display = 'block';
     }
-    if (characteristicUuid) {
-        document.getElementById('ble-profile-characteristic-uuid').value = characteristicUuid;
-    }
-}
+};
 
 function updateBLEProfilesList() {
     const profilesList = document.getElementById('ble-profiles-list');
@@ -484,8 +509,14 @@ function clearBLEProfileForm() {
 
 async function saveBLEProfiles() {
     try {
+        const bleEnabledEl = document.getElementById('ble-enabled');
+        if (!bleEnabledEl) {
+            console.error('ble-enabled elementi bulunamadı');
+            return;
+        }
+        
         const result = await apiCall('/config/ble/profiles', 'POST', {
-            enabled: document.getElementById('ble-enabled').checked,
+            enabled: bleEnabledEl.checked,
             profiles: bleProfiles
         });
         
@@ -494,6 +525,7 @@ async function saveBLEProfiles() {
             clearBLEProfileForm();
         }
     } catch (error) {
+        console.error('BLE profilleri kaydetme hatası:', error);
         showMessage('ble-message', 'Kaydetme başarısız: ' + error.message, true);
     }
 }
@@ -506,6 +538,12 @@ function setupBLE() {
     const deleteProfileBtn = document.getElementById('delete-ble-profile');
     const addTelemetryBtn = document.getElementById('add-telemetry');
     const bleEnabled = document.getElementById('ble-enabled');
+    
+    // Element kontrolü
+    if (!scanBtn || !addProfileBtn || !saveProfileBtn || !cancelProfileBtn || !deleteProfileBtn || !addTelemetryBtn || !bleEnabled) {
+        console.error('BLE elementleri bulunamadı');
+        return;
+    }
     
     // BLE tarama
     scanBtn.addEventListener('click', async () => {
@@ -669,6 +707,11 @@ function selectWiFiNetwork(ssid, encrypted) {
 function setupWiFi() {
     const scanBtn = document.getElementById('scan-wifi');
     const saveBtn = document.getElementById('save-wifi');
+    
+    if (!scanBtn || !saveBtn) {
+        console.error('WiFi elementleri bulunamadı');
+        return;
+    }
     
     scanBtn.addEventListener('click', async () => {
         try {
