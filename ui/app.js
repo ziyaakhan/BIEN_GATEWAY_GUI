@@ -5,6 +5,9 @@
 const API_BASE = '/api';
 
 async function apiCall(endpoint, method = 'GET', data = null, isLogin = false) {
+    const url = API_BASE + endpoint;
+    console.log(`API Call: ${method} ${url}`, data ? { data } : '');
+    
     const options = {
         method: method,
         headers: {
@@ -18,7 +21,9 @@ async function apiCall(endpoint, method = 'GET', data = null, isLogin = false) {
     }
 
     try {
-        const response = await fetch(API_BASE + endpoint, options);
+        console.log('Fetching...', url);
+        const response = await fetch(url, options);
+        console.log('Response status:', response.status, response.statusText);
         
         // For login endpoint, handle 401 as error
         if (response.status === 401) {
@@ -32,6 +37,7 @@ async function apiCall(endpoint, method = 'GET', data = null, isLogin = false) {
                 }
             } else {
                 // For other endpoints, redirect to login
+                console.log('401 Unauthorized - redirecting to login');
                 showScreen('login-screen');
                 return null;
             }
@@ -39,12 +45,16 @@ async function apiCall(endpoint, method = 'GET', data = null, isLogin = false) {
 
         // Content-Type kontrolü
         const contentType = response.headers.get('content-type');
+        console.log('Content-Type:', contentType);
+        
         if (!contentType || !contentType.includes('application/json')) {
             const text = await response.text();
+            console.error('Non-JSON response:', text.substring(0, 200));
             throw new Error(`Beklenmeyen yanıt formatı: ${text.substring(0, 100)}`);
         }
         
         const result = await response.json();
+        console.log('API Response:', result);
         
         if (!response.ok) {
             throw new Error(result.detail || result.message || 'Request failed');
@@ -53,6 +63,12 @@ async function apiCall(endpoint, method = 'GET', data = null, isLogin = false) {
         return result;
     } catch (error) {
         console.error('API Error:', error);
+        console.error('Error details:', {
+            endpoint: url,
+            method: method,
+            error: error.message,
+            stack: error.stack
+        });
         throw error;
     }
 }
@@ -585,7 +601,10 @@ function setupBLE() {
     console.log('BLE setup başlatılıyor...');
     
     // BLE tarama
-    scanBtn.addEventListener('click', async () => {
+    scanBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('BLE tarama butonuna tıklandı!');
         try {
             scanBtn.disabled = true;
             scanBtn.textContent = 'Taranıyor...';
@@ -608,15 +627,24 @@ function setupBLE() {
         }
     });
     
+    console.log('BLE scan button event listener eklendi');
+    
     // Yeni profil ekle
-    addProfileBtn.addEventListener('click', () => {
-        console.log('Yeni profil ekle butonuna tıklandı');
+    addProfileBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Yeni profil ekle butonuna tıklandı!');
         clearBLEProfileForm();
         const profileForm = document.getElementById('ble-profile-form');
         if (profileForm) {
             profileForm.style.display = 'block';
+            console.log('Profil formu gösterildi');
+        } else {
+            console.error('ble-profile-form elementi bulunamadı!');
         }
     });
+    
+    console.log('BLE add profile button event listener eklendi');
     
     // Profil kaydet
     saveProfileBtn.addEventListener('click', async () => {
@@ -781,7 +809,10 @@ function setupWiFi() {
     wifiSetupDone = true;
     console.log('WiFi setup başlatılıyor...');
     
-    scanBtn.addEventListener('click', async () => {
+    scanBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('WiFi tarama butonuna tıklandı!');
         try {
             scanBtn.disabled = true;
             scanBtn.textContent = 'Taranıyor...';
@@ -803,6 +834,8 @@ function setupWiFi() {
             scanBtn.textContent = 'WiFi Ağlarını Tara';
         }
     });
+    
+    console.log('WiFi scan button event listener eklendi');
     
     saveBtn.addEventListener('click', async () => {
         const config = {

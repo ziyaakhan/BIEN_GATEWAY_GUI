@@ -833,8 +833,16 @@ async def update_ble(config: BLEConfig, request: Request):
 @app.post("/api/config/ble/profiles")
 async def update_ble_profiles(request_data: BLEProfilesRequest, request: Request):
     """Update BLE profiles and ThingsBoard Gateway config"""
+    print("=" * 50)
+    print("BLE PROFILES UPDATE ENDPOINT ÇAĞRILDI")
+    print("=" * 50)
+    print(f"Request data: enabled={request_data.enabled}, profiles count={len(request_data.profiles)}")
+    
     user = get_session_user(request)
+    print(f"Session user: {user}")
+    
     if not user:
+        print("401: Kullanıcı kimlik doğrulaması yapılmamış")
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     # Gateway config'i güncelle
@@ -844,6 +852,7 @@ async def update_ble_profiles(request_data: BLEProfilesRequest, request: Request
     
     gateway_config["ble"]["enabled"] = request_data.enabled
     gateway_config["ble"]["profiles"] = request_data.profiles
+    print(f"Gateway config güncelleniyor: enabled={request_data.enabled}")
     save_gateway_config(gateway_config)
     
     # ThingsBoard Gateway config'leri güncelle
@@ -865,12 +874,22 @@ async def update_ble_profiles(request_data: BLEProfilesRequest, request: Request
 @app.post("/api/ble/scan")
 async def scan_ble(request: Request):
     """Scan for BLE devices"""
+    print("=" * 50)
+    print("BLE SCAN ENDPOINT ÇAĞRILDI")
+    print("=" * 50)
+    
     user = get_session_user(request)
+    print(f"Session user: {user}")
+    
     if not user:
+        print("401: Kullanıcı kimlik doğrulaması yapılmamış")
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     try:
+        print("BLE cihazları taranıyor...")
         devices = scan_ble_devices()
+        print(f"Bulunan cihaz sayısı: {len(devices)}")
+        print(f"Cihazlar: {devices}")
         return {"status": "success", "devices": devices}
     except Exception as e:
         print(f"BLE tarama hatası: {e}")
@@ -953,11 +972,21 @@ async def change_password(request_data: ChangePasswordRequest, request: Request)
 @app.post("/api/wifi/scan")
 async def scan_wifi(request: Request):
     """Scan for WiFi networks"""
+    print("=" * 50)
+    print("WIFI SCAN ENDPOINT ÇAĞRILDI")
+    print("=" * 50)
+    
     user = get_session_user(request)
+    print(f"Session user: {user}")
+    
     if not user:
+        print("401: Kullanıcı kimlik doğrulaması yapılmamış")
         raise HTTPException(status_code=401, detail="Not authenticated")
     
+    print("WiFi ağları taranıyor...")
     networks = scan_wifi_networks()
+    print(f"Bulunan ağ sayısı: {len(networks)}")
+    print(f"Ağlar: {networks}")
     
     # Save scanned networks to config
     gateway_config = load_gateway_config()
