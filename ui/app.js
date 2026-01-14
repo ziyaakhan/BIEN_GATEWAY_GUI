@@ -117,9 +117,17 @@ function setupNavigation() {
             
             // Lazy setup - section görünür olduğunda setup yap
             if (sectionId === 'ble') {
-                setTimeout(() => setupBLE(), 100);
+                console.log('BLE section görünür oldu, setupBLE çağrılıyor...');
+                setTimeout(() => {
+                    console.log('setupBLE timeout içinde çağrılıyor...');
+                    setupBLE();
+                }, 100);
             } else if (sectionId === 'wifi') {
-                setTimeout(() => setupWiFi(), 100);
+                console.log('WiFi section görünür oldu, setupWiFi çağrılıyor...');
+                setTimeout(() => {
+                    console.log('setupWiFi timeout içinde çağrılıyor...');
+                    setupWiFi();
+                }, 100);
             }
         });
     });
@@ -940,15 +948,35 @@ function setupSystem() {
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOMContentLoaded - Tüm setup fonksiyonları çağrılıyor...');
+    
     setupLogin();
+    console.log('✓ setupLogin tamamlandı');
+    
     setupLogout();
+    console.log('✓ setupLogout tamamlandı');
+    
     setupNavigation();
+    console.log('✓ setupNavigation tamamlandı');
+    
     setupRS485();
+    console.log('✓ setupRS485 tamamlandı');
+    
     setupBLE();
+    console.log('✓ setupBLE çağrıldı (lazy init)');
+    
     setupLoRaWAN();
+    console.log('✓ setupLoRaWAN tamamlandı');
+    
     setupWiFi();
+    console.log('✓ setupWiFi çağrıldı (lazy init)');
+    
     setupSystem();
+    console.log('✓ setupSystem tamamlandı');
 
     // Start with login screen
     showScreen('login-screen');
+    console.log('✓ Login screen gösterildi');
+    
+    console.log('Tüm setup fonksiyonları tamamlandı!');
 });

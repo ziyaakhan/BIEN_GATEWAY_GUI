@@ -13,9 +13,17 @@ import json
 import os
 import subprocess
 import time
+import logging
 from pathlib import Path
 from datetime import datetime, timedelta
 import secrets
+
+# Logging yapılandırması
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Paths
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -833,15 +841,21 @@ async def update_ble(config: BLEConfig, request: Request):
 @app.post("/api/config/ble/profiles")
 async def update_ble_profiles(request_data: BLEProfilesRequest, request: Request):
     """Update BLE profiles and ThingsBoard Gateway config"""
+    logger.info("=" * 50)
+    logger.info("BLE PROFILES UPDATE ENDPOINT ÇAĞRILDI")
+    logger.info("=" * 50)
     print("=" * 50)
     print("BLE PROFILES UPDATE ENDPOINT ÇAĞRILDI")
     print("=" * 50)
+    logger.info(f"Request data: enabled={request_data.enabled}, profiles count={len(request_data.profiles)}")
     print(f"Request data: enabled={request_data.enabled}, profiles count={len(request_data.profiles)}")
     
     user = get_session_user(request)
+    logger.info(f"Session user: {user}")
     print(f"Session user: {user}")
     
     if not user:
+        logger.warning("401: Kullanıcı kimlik doğrulaması yapılmamış")
         print("401: Kullanıcı kimlik doğrulaması yapılmamış")
         raise HTTPException(status_code=401, detail="Not authenticated")
     
@@ -852,6 +866,7 @@ async def update_ble_profiles(request_data: BLEProfilesRequest, request: Request
     
     gateway_config["ble"]["enabled"] = request_data.enabled
     gateway_config["ble"]["profiles"] = request_data.profiles
+    logger.info(f"Gateway config güncelleniyor: enabled={request_data.enabled}")
     print(f"Gateway config güncelleniyor: enabled={request_data.enabled}")
     save_gateway_config(gateway_config)
     
@@ -874,24 +889,33 @@ async def update_ble_profiles(request_data: BLEProfilesRequest, request: Request
 @app.post("/api/ble/scan")
 async def scan_ble(request: Request):
     """Scan for BLE devices"""
+    logger.info("=" * 50)
+    logger.info("BLE SCAN ENDPOINT ÇAĞRILDI")
+    logger.info("=" * 50)
     print("=" * 50)
     print("BLE SCAN ENDPOINT ÇAĞRILDI")
     print("=" * 50)
     
     user = get_session_user(request)
+    logger.info(f"Session user: {user}")
     print(f"Session user: {user}")
     
     if not user:
+        logger.warning("401: Kullanıcı kimlik doğrulaması yapılmamış")
         print("401: Kullanıcı kimlik doğrulaması yapılmamış")
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     try:
+        logger.info("BLE cihazları taranıyor...")
         print("BLE cihazları taranıyor...")
         devices = scan_ble_devices()
+        logger.info(f"Bulunan cihaz sayısı: {len(devices)}")
+        logger.info(f"Cihazlar: {devices}")
         print(f"Bulunan cihaz sayısı: {len(devices)}")
         print(f"Cihazlar: {devices}")
         return {"status": "success", "devices": devices}
     except Exception as e:
+        logger.error(f"BLE tarama hatası: {e}", exc_info=True)
         print(f"BLE tarama hatası: {e}")
         import traceback
         traceback.print_exc()
@@ -972,19 +996,27 @@ async def change_password(request_data: ChangePasswordRequest, request: Request)
 @app.post("/api/wifi/scan")
 async def scan_wifi(request: Request):
     """Scan for WiFi networks"""
+    logger.info("=" * 50)
+    logger.info("WIFI SCAN ENDPOINT ÇAĞRILDI")
+    logger.info("=" * 50)
     print("=" * 50)
     print("WIFI SCAN ENDPOINT ÇAĞRILDI")
     print("=" * 50)
     
     user = get_session_user(request)
+    logger.info(f"Session user: {user}")
     print(f"Session user: {user}")
     
     if not user:
+        logger.warning("401: Kullanıcı kimlik doğrulaması yapılmamış")
         print("401: Kullanıcı kimlik doğrulaması yapılmamış")
         raise HTTPException(status_code=401, detail="Not authenticated")
     
+    logger.info("WiFi ağları taranıyor...")
     print("WiFi ağları taranıyor...")
     networks = scan_wifi_networks()
+    logger.info(f"Bulunan ağ sayısı: {len(networks)}")
+    logger.info(f"Ağlar: {networks}")
     print(f"Bulunan ağ sayısı: {len(networks)}")
     print(f"Ağlar: {networks}")
     
