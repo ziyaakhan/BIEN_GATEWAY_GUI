@@ -87,11 +87,24 @@ function setupNavigation() {
             // Show corresponding section
             const sectionId = item.dataset.section;
             sections.forEach(section => section.classList.remove('active'));
-            document.getElementById('section-' + sectionId).classList.add('active');
+            const targetSection = document.getElementById('section-' + sectionId);
+            if (targetSection) {
+                targetSection.classList.add('active');
+            }
 
             // Update title
             const title = item.textContent.trim();
-            document.getElementById('section-title').textContent = title;
+            const titleEl = document.getElementById('section-title');
+            if (titleEl) {
+                titleEl.textContent = title;
+            }
+            
+            // Lazy setup - section görünür olduğunda setup yap
+            if (sectionId === 'ble') {
+                setTimeout(() => setupBLE(), 100);
+            } else if (sectionId === 'wifi') {
+                setTimeout(() => setupWiFi(), 100);
+            }
         });
     });
 }
@@ -333,6 +346,7 @@ async function saveModbusConfig() {
 
 let bleProfiles = [];
 let currentTelemetryItems = [];
+let wifiSetupDone = false;
 
 function updateBLEScannedDevices(devices) {
     const devicesList = document.getElementById('ble-scanned-devices');
@@ -530,7 +544,12 @@ async function saveBLEProfiles() {
     }
 }
 
+let bleSetupDone = false;
+
 function setupBLE() {
+    // Lazy initialization - sadece BLE section görünür olduğunda setup yap
+    if (bleSetupDone) return;
+    
     const scanBtn = document.getElementById('scan-ble');
     const addProfileBtn = document.getElementById('add-ble-profile');
     const saveProfileBtn = document.getElementById('save-ble-profile');
@@ -539,24 +558,31 @@ function setupBLE() {
     const addTelemetryBtn = document.getElementById('add-telemetry');
     const bleEnabled = document.getElementById('ble-enabled');
     
-    // Element kontrolü
+    // Element kontrolü - eğer yoksa, navigation değiştiğinde tekrar dene
     if (!scanBtn || !addProfileBtn || !saveProfileBtn || !cancelProfileBtn || !deleteProfileBtn || !addTelemetryBtn || !bleEnabled) {
-        console.error('BLE elementleri bulunamadı');
+        console.log('BLE elementleri henüz yüklenmedi, navigation değiştiğinde tekrar deneniyor...');
         return;
     }
+    
+    bleSetupDone = true;
     
     // BLE tarama
     scanBtn.addEventListener('click', async () => {
         try {
             scanBtn.disabled = true;
             scanBtn.textContent = 'Taranıyor...';
+            console.log('BLE tarama başlatılıyor...');
             const result = await apiCall('/ble/scan', 'POST');
+            console.log('BLE tarama sonucu:', result);
             
             if (result && result.devices) {
                 updateBLEScannedDevices(result.devices);
                 showMessage('ble-message', `${result.devices.length} BLE cihazı bulundu`);
+            } else {
+                showMessage('ble-message', 'BLE cihazı bulunamadı', true);
             }
         } catch (error) {
+            console.error('BLE tarama hatası:', error);
             showMessage('ble-message', 'BLE tarama başarısız: ' + error.message, true);
         } finally {
             scanBtn.disabled = false;
@@ -566,8 +592,12 @@ function setupBLE() {
     
     // Yeni profil ekle
     addProfileBtn.addEventListener('click', () => {
+        console.log('Yeni profil ekle butonuna tıklandı');
         clearBLEProfileForm();
-        document.getElementById('ble-profile-form').style.display = 'block';
+        const profileForm = document.getElementById('ble-profile-form');
+        if (profileForm) {
+            profileForm.style.display = 'block';
+        }
     });
     
     // Profil kaydet
@@ -578,10 +608,10 @@ function setupBLE() {
             mac: document.getElementById('ble-profile-mac').value,
             service_uuid: document.getElementById('ble-profile-service-uuid').value,
             characteristic_uuid: document.getElementById('ble-profile-characteristic-uuid').value,
-            connect_retry: parseInt(document.getElementById('ble-profile-connect-retry').value),
-            connect_retry_seconds: parseInt(document.getElementById('ble-profile-connect-retry-seconds').value),
-            wait_after_retries: parseInt(document.getElementById('ble-profile-wait-after-retries').value),
-            poll_period: parseInt(document.getElementById('ble-profile-poll-period').value),
+            connect_retry: parseInt(document.getElementById('ble-profile-connect-retry').value) || 3,
+            connect_retry_seconds: parseInt(document.getElementById('ble-profile-connect-retry-seconds').value) || 10,
+            wait_after_retries: parseInt(document.getElementById('ble-profile-wait-after-retries').value) || 30,
+            poll_period: parseInt(document.getElementById('ble-profile-poll-period').value) || 10000,
             telemetry: currentTelemetryItems.filter(item => item.key && item.valueExpression)
         };
         
@@ -686,44 +716,64 @@ function setupLoRaWAN() {
 
 function updateWiFiNetworks(networks) {
     const networksList = document.getElementById('wifi-networks');
+    if (!networksList) {
+        console.error('wifi-networks elementi bulunamadı');
+        return;
+    }
+    
     if (networks && networks.length > 0) {
-        networksList.innerHTML = networks.map(network => 
-            `<div class="device-item" style="cursor: pointer; padding: 10px; margin-bottom: 5px; border: 1px solid #e1e8ed; border-radius: 4px;" onclick="selectWiFiNetwork('${network.ssid}', ${network.encrypted})">
-                <strong>${network.ssid}</strong> ${network.encrypted ? '(Şifreli)' : '(Açık)'} - Sinyal: ${network.signal || 'N/A'}%
-            </div>`
-        ).join('');
+        networksList.innerHTML = networks.map(network => {
+            // XSS koruması için escape
+            const ssid = (network.ssid || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            const displaySsid = (network.ssid || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return `<div class="device-item" style="cursor: pointer; padding: 10px; margin-bottom: 5px; border: 1px solid #e1e8ed; border-radius: 4px;" onclick="selectWiFiNetwork('${ssid}', ${network.encrypted ? 'true' : 'false'})">
+                <strong>${displaySsid}</strong> ${network.encrypted ? '(Şifreli)' : '(Açık)'} - Sinyal: ${network.signal || 'N/A'}%
+            </div>`;
+        }).join('');
     } else {
         networksList.innerHTML = '<p class="text-muted">WiFi ağı bulunamadı</p>';
     }
 }
 
-function selectWiFiNetwork(ssid, encrypted) {
-    document.getElementById('wifi-ssid').value = ssid;
-    if (!encrypted) {
-        document.getElementById('wifi-password').value = '';
-    }
-}
+// Global scope'ta olmalı (HTML onclick için)
+window.selectWiFiNetwork = function(ssid, encrypted) {
+    const ssidInput = document.getElementById('wifi-ssid');
+    const passwordInput = document.getElementById('wifi-password');
+    
+    if (ssidInput) ssidInput.value = ssid || '';
+    if (passwordInput && !encrypted) passwordInput.value = '';
+};
 
 function setupWiFi() {
+    // Lazy initialization - sadece WiFi section görünür olduğunda setup yap
+    if (wifiSetupDone) return;
+    
     const scanBtn = document.getElementById('scan-wifi');
     const saveBtn = document.getElementById('save-wifi');
     
     if (!scanBtn || !saveBtn) {
-        console.error('WiFi elementleri bulunamadı');
+        console.log('WiFi elementleri henüz yüklenmedi, navigation değiştiğinde tekrar deneniyor...');
         return;
     }
+    
+    wifiSetupDone = true;
     
     scanBtn.addEventListener('click', async () => {
         try {
             scanBtn.disabled = true;
             scanBtn.textContent = 'Taranıyor...';
+            console.log('WiFi tarama başlatılıyor...');
             const result = await apiCall('/wifi/scan', 'POST');
+            console.log('WiFi tarama sonucu:', result);
             
             if (result && result.networks) {
                 updateWiFiNetworks(result.networks);
                 showMessage('wifi-message', `${result.networks.length} WiFi ağı bulundu`);
+            } else {
+                showMessage('wifi-message', 'WiFi ağı bulunamadı', true);
             }
         } catch (error) {
+            console.error('WiFi tarama hatası:', error);
             showMessage('wifi-message', 'WiFi tarama başarısız: ' + error.message, true);
         } finally {
             scanBtn.disabled = false;
