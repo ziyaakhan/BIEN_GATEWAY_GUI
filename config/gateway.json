@@ -8,8 +8,7 @@
   },
   "ble": {
     "enabled": false,
-    "scan_interval": 10,
-    "devices": []
+    "profiles": []
   },
   "lorawan": {
     "enabled": false,

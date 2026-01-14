@@ -213,38 +213,10 @@ async function loadConfig() {
         // BLE
         if (config.ble) {
             document.getElementById('ble-enabled').checked = config.ble.enabled || false;
-            if (config.ble.server_mac) document.getElementById('ble-server-mac').value = config.ble.server_mac;
-            if (config.ble.service_uuid) document.getElementById('ble-service-uuid').value = config.ble.service_uuid;
-            if (config.ble.characteristic_uuid) document.getElementById('ble-characteristic-uuid').value = config.ble.characteristic_uuid;
-            if (config.ble.connection_timeout) document.getElementById('ble-connection-timeout').value = config.ble.connection_timeout;
-            if (config.ble.scan_interval) document.getElementById('ble-scan-interval').value = config.ble.scan_interval;
-            document.getElementById('ble-auto-reconnect').checked = config.ble.auto_reconnect || false;
-            if (config.ble.operation_mode) document.getElementById('ble-operation-mode').value = config.ble.operation_mode;
-            if (config.ble.read_interval) document.getElementById('ble-read-interval').value = config.ble.read_interval;
-            if (config.ble.write_interval) document.getElementById('ble-write-interval').value = config.ble.write_interval;
-            document.getElementById('ble-connection-control').checked = config.ble.connection_control || false;
             
-            if (config.ble.forwarder_type) {
-                document.getElementById('ble-forwarder-type').value = config.ble.forwarder_type;
-                toggleBLEForwarderSettings(config.ble.forwarder_type);
-            }
-            if (config.ble.mqtt_server) document.getElementById('ble-mqtt-server').value = config.ble.mqtt_server;
-            if (config.ble.mqtt_port) document.getElementById('ble-mqtt-port').value = config.ble.mqtt_port;
-            if (config.ble.mqtt_topic) document.getElementById('ble-mqtt-topic').value = config.ble.mqtt_topic;
-            if (config.ble.mqtt_access_token) document.getElementById('ble-mqtt-access-token').value = config.ble.mqtt_access_token;
-            if (config.ble.https_server) document.getElementById('ble-https-server').value = config.ble.https_server;
-            if (config.ble.https_port) document.getElementById('ble-https-port').value = config.ble.https_port;
-            if (config.ble.https_endpoint) document.getElementById('ble-https-endpoint').value = config.ble.https_endpoint;
-            if (config.ble.https_access_token) document.getElementById('ble-https-access-token').value = config.ble.https_access_token;
-            
-            // Update BLE device list
-            const deviceList = document.getElementById('ble-devices');
-            if (config.ble.devices && config.ble.devices.length > 0) {
-                deviceList.innerHTML = config.ble.devices.map(device => 
-                    `<div class="device-item">${device}</div>`
-                ).join('');
-            } else {
-                deviceList.innerHTML = '<p class="text-muted">Henüz cihaz bulunmuyor</p>';
+            if (config.ble.profiles) {
+                bleProfiles = config.ble.profiles;
+                updateBLEProfilesList();
             }
         }
 
@@ -352,66 +324,268 @@ async function saveModbusConfig() {
 // BLE Configuration
 // ============================================================================
 
-function toggleBLEForwarderSettings(type) {
-    const mqttSettings = document.getElementById('ble-mqtt-settings');
-    const httpsSettings = document.getElementById('ble-https-settings');
-    
-    if (type === 'mqtt') {
-        mqttSettings.style.display = 'block';
-        httpsSettings.style.display = 'none';
+let bleProfiles = [];
+let currentTelemetryItems = [];
+
+function updateBLEScannedDevices(devices) {
+    const devicesList = document.getElementById('ble-scanned-devices');
+    if (devices && devices.length > 0) {
+        devicesList.innerHTML = devices.map(device => 
+            `<div class="device-item" style="cursor: pointer; padding: 10px; margin-bottom: 5px; border: 1px solid #e1e8ed; border-radius: 4px;" onclick="selectBLEDevice('${device.mac}', '${device.service_uuid || ''}', '${device.characteristic_uuid || ''}')">
+                <strong>${device.name || device.mac}</strong><br>
+                MAC: ${device.mac}<br>
+                ${device.service_uuid ? `Service: ${device.service_uuid}<br>` : ''}
+                ${device.characteristic_uuid ? `Characteristic: ${device.characteristic_uuid}` : ''}
+            </div>`
+        ).join('');
     } else {
-        mqttSettings.style.display = 'none';
-        httpsSettings.style.display = 'block';
+        devicesList.innerHTML = '<p class="text-muted">BLE cihazı bulunamadı</p>';
+    }
+}
+
+function selectBLEDevice(mac, serviceUuid, characteristicUuid) {
+    document.getElementById('ble-profile-mac').value = mac;
+    if (serviceUuid) {
+        document.getElementById('ble-profile-service-uuid').value = serviceUuid;
+    }
+    if (characteristicUuid) {
+        document.getElementById('ble-profile-characteristic-uuid').value = characteristicUuid;
+    }
+}
+
+function updateBLEProfilesList() {
+    const profilesList = document.getElementById('ble-profiles-list');
+    if (bleProfiles.length === 0) {
+        profilesList.innerHTML = '<p class="text-muted">Henüz profil yok</p>';
+        return;
+    }
+    
+    profilesList.innerHTML = bleProfiles.map((profile, index) => {
+        const status = profile.connected ? '<span style="color: green;">● Bağlı</span>' : '<span style="color: red;">● Bağlı Değil</span>';
+        return `
+            <div class="device-item" style="padding: 10px; margin-bottom: 5px; border: 1px solid #e1e8ed; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong>${profile.name}</strong> - ${profile.mac}<br>
+                    ${status}
+                </div>
+                <div>
+                    <button class="btn btn-secondary" onclick="editBLEProfile(${index})" style="padding: 5px 10px; margin-right: 5px;">Düzenle</button>
+                    <button class="btn btn-danger" onclick="deleteBLEProfile(${index})" style="padding: 5px 10px;">Sil</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function addTelemetryItem() {
+    const telemetryList = document.getElementById('ble-telemetry-list');
+    const index = currentTelemetryItems.length;
+    
+    const telemetryItem = {
+        key: '',
+        valueExpression: ''
+    };
+    currentTelemetryItems.push(telemetryItem);
+    
+    renderTelemetryList();
+}
+
+function removeTelemetryItem(index) {
+    currentTelemetryItems.splice(index, 1);
+    renderTelemetryList();
+}
+
+function renderTelemetryList() {
+    const telemetryList = document.getElementById('ble-telemetry-list');
+    if (currentTelemetryItems.length === 0) {
+        telemetryList.innerHTML = '<p class="text-muted">Henüz telemetry eklenmedi</p>';
+        return;
+    }
+    
+    telemetryList.innerHTML = currentTelemetryItems.map((item, index) => `
+        <div style="padding: 10px; margin-bottom: 10px; border: 1px solid #e1e8ed; border-radius: 4px; background: #f8f9fa;">
+            <div class="form-row">
+                <div class="form-group" style="flex: 1;">
+                    <label>Key</label>
+                    <input type="text" class="form-control telemetry-key" data-index="${index}" value="${item.key}" placeholder="Örn: temperature">
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Value Expression</label>
+                    <input type="text" class="form-control telemetry-expression" data-index="${index}" value="${item.valueExpression}" placeholder="Örn: [0], [:], [1,2]">
+                </div>
+                <div class="form-group" style="width: 100px;">
+                    <label>&nbsp;</label>
+                    <button class="btn btn-danger" onclick="removeTelemetryItem(${index})" style="width: 100%;">Sil</button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+    
+    // Event listeners ekle
+    document.querySelectorAll('.telemetry-key').forEach(input => {
+        input.addEventListener('input', (e) => {
+            const index = parseInt(e.target.dataset.index);
+            currentTelemetryItems[index].key = e.target.value;
+        });
+    });
+    
+    document.querySelectorAll('.telemetry-expression').forEach(input => {
+        input.addEventListener('input', (e) => {
+            const index = parseInt(e.target.dataset.index);
+            currentTelemetryItems[index].valueExpression = e.target.value;
+        });
+    });
+}
+
+function editBLEProfile(index) {
+    const profile = bleProfiles[index];
+    document.getElementById('ble-profile-id').value = index;
+    document.getElementById('ble-profile-name').value = profile.name || '';
+    document.getElementById('ble-profile-mac').value = profile.mac || '';
+    document.getElementById('ble-profile-service-uuid').value = profile.service_uuid || '';
+    document.getElementById('ble-profile-characteristic-uuid').value = profile.characteristic_uuid || '';
+    document.getElementById('ble-profile-connect-retry').value = profile.connect_retry || 3;
+    document.getElementById('ble-profile-connect-retry-seconds').value = profile.connect_retry_seconds || 10;
+    document.getElementById('ble-profile-wait-after-retries').value = profile.wait_after_retries || 30;
+    document.getElementById('ble-profile-poll-period').value = profile.poll_period || 10000;
+    
+    currentTelemetryItems = profile.telemetry ? [...profile.telemetry] : [];
+    renderTelemetryList();
+    
+    document.getElementById('ble-profile-form').style.display = 'block';
+    document.getElementById('delete-ble-profile').style.display = 'inline-block';
+}
+
+function deleteBLEProfile(index) {
+    if (!confirm('Bu profili silmek istediğinize emin misiniz?')) {
+        return;
+    }
+    
+    bleProfiles.splice(index, 1);
+    updateBLEProfilesList();
+    saveBLEProfiles();
+}
+
+function clearBLEProfileForm() {
+    document.getElementById('ble-profile-id').value = '';
+    document.getElementById('ble-profile-name').value = '';
+    document.getElementById('ble-profile-mac').value = '';
+    document.getElementById('ble-profile-service-uuid').value = '';
+    document.getElementById('ble-profile-characteristic-uuid').value = '';
+    document.getElementById('ble-profile-connect-retry').value = 3;
+    document.getElementById('ble-profile-connect-retry-seconds').value = 10;
+    document.getElementById('ble-profile-wait-after-retries').value = 30;
+    document.getElementById('ble-profile-poll-period').value = 10000;
+    currentTelemetryItems = [];
+    renderTelemetryList();
+    document.getElementById('ble-profile-form').style.display = 'none';
+    document.getElementById('delete-ble-profile').style.display = 'none';
+}
+
+async function saveBLEProfiles() {
+    try {
+        const result = await apiCall('/config/ble/profiles', 'POST', {
+            enabled: document.getElementById('ble-enabled').checked,
+            profiles: bleProfiles
+        });
+        
+        if (result && result.status === 'success') {
+            showMessage('ble-message', 'BLE profilleri kaydedildi');
+            clearBLEProfileForm();
+        }
+    } catch (error) {
+        showMessage('ble-message', 'Kaydetme başarısız: ' + error.message, true);
     }
 }
 
 function setupBLE() {
-    const saveBtn = document.getElementById('save-ble');
-    const forwarderType = document.getElementById('ble-forwarder-type');
+    const scanBtn = document.getElementById('scan-ble');
+    const addProfileBtn = document.getElementById('add-ble-profile');
+    const saveProfileBtn = document.getElementById('save-ble-profile');
+    const cancelProfileBtn = document.getElementById('cancel-ble-profile');
+    const deleteProfileBtn = document.getElementById('delete-ble-profile');
+    const addTelemetryBtn = document.getElementById('add-telemetry');
+    const bleEnabled = document.getElementById('ble-enabled');
     
-    forwarderType.addEventListener('change', (e) => {
-        toggleBLEForwarderSettings(e.target.value);
-    });
-    
-    saveBtn.addEventListener('click', async () => {
-        const forwarderTypeValue = forwarderType.value;
-        const config = {
-            enabled: document.getElementById('ble-enabled').checked,
-            server_mac: document.getElementById('ble-server-mac').value,
-            service_uuid: document.getElementById('ble-service-uuid').value,
-            characteristic_uuid: document.getElementById('ble-characteristic-uuid').value,
-            connection_timeout: parseInt(document.getElementById('ble-connection-timeout').value),
-            scan_interval: parseInt(document.getElementById('ble-scan-interval').value),
-            auto_reconnect: document.getElementById('ble-auto-reconnect').checked,
-            operation_mode: document.getElementById('ble-operation-mode').value,
-            read_interval: parseInt(document.getElementById('ble-read-interval').value),
-            write_interval: parseInt(document.getElementById('ble-write-interval').value),
-            connection_control: document.getElementById('ble-connection-control').checked,
-            forwarder_type: forwarderTypeValue,
-            devices: [] // Device list is read-only for now
-        };
-
-        if (forwarderTypeValue === 'mqtt') {
-            config.mqtt_server = document.getElementById('ble-mqtt-server').value;
-            config.mqtt_port = parseInt(document.getElementById('ble-mqtt-port').value);
-            config.mqtt_topic = document.getElementById('ble-mqtt-topic').value;
-            config.mqtt_access_token = document.getElementById('ble-mqtt-access-token').value;
-        } else {
-            config.https_server = document.getElementById('ble-https-server').value;
-            config.https_port = parseInt(document.getElementById('ble-https-port').value) || 443;
-            config.https_endpoint = document.getElementById('ble-https-endpoint').value;
-            config.https_access_token = document.getElementById('ble-https-access-token').value;
-        }
-
+    // BLE tarama
+    scanBtn.addEventListener('click', async () => {
         try {
-            const result = await apiCall('/config/ble', 'POST', config);
+            scanBtn.disabled = true;
+            scanBtn.textContent = 'Taranıyor...';
+            const result = await apiCall('/ble/scan', 'POST');
             
-            if (result && result.status === 'success') {
-                showMessage('ble-message', 'BLE ayarları kaydedildi');
+            if (result && result.devices) {
+                updateBLEScannedDevices(result.devices);
+                showMessage('ble-message', `${result.devices.length} BLE cihazı bulundu`);
             }
         } catch (error) {
-            showMessage('ble-message', 'Kaydetme başarısız: ' + error.message, true);
+            showMessage('ble-message', 'BLE tarama başarısız: ' + error.message, true);
+        } finally {
+            scanBtn.disabled = false;
+            scanBtn.textContent = 'BLE Cihazlarını Tara';
         }
+    });
+    
+    // Yeni profil ekle
+    addProfileBtn.addEventListener('click', () => {
+        clearBLEProfileForm();
+        document.getElementById('ble-profile-form').style.display = 'block';
+    });
+    
+    // Profil kaydet
+    saveProfileBtn.addEventListener('click', async () => {
+        const profileId = document.getElementById('ble-profile-id').value;
+        const profile = {
+            name: document.getElementById('ble-profile-name').value,
+            mac: document.getElementById('ble-profile-mac').value,
+            service_uuid: document.getElementById('ble-profile-service-uuid').value,
+            characteristic_uuid: document.getElementById('ble-profile-characteristic-uuid').value,
+            connect_retry: parseInt(document.getElementById('ble-profile-connect-retry').value),
+            connect_retry_seconds: parseInt(document.getElementById('ble-profile-connect-retry-seconds').value),
+            wait_after_retries: parseInt(document.getElementById('ble-profile-wait-after-retries').value),
+            poll_period: parseInt(document.getElementById('ble-profile-poll-period').value),
+            telemetry: currentTelemetryItems.filter(item => item.key && item.valueExpression)
+        };
+        
+        if (!profile.name || !profile.mac) {
+            showMessage('ble-message', 'Lütfen cihaz ismi ve MAC adresi girin', true);
+            return;
+        }
+        
+        if (profileId !== '') {
+            // Güncelle
+            bleProfiles[parseInt(profileId)] = profile;
+        } else {
+            // Yeni ekle
+            profile.connected = false;
+            bleProfiles.push(profile);
+        }
+        
+        updateBLEProfilesList();
+        await saveBLEProfiles();
+    });
+    
+    // İptal
+    cancelProfileBtn.addEventListener('click', () => {
+        clearBLEProfileForm();
+    });
+    
+    // Sil
+    deleteProfileBtn.addEventListener('click', () => {
+        const profileId = document.getElementById('ble-profile-id').value;
+        if (profileId !== '') {
+            deleteBLEProfile(parseInt(profileId));
+        }
+    });
+    
+    // Telemetry ekle
+    addTelemetryBtn.addEventListener('click', () => {
+        addTelemetryItem();
+    });
+    
+    // BLE enabled toggle
+    bleEnabled.addEventListener('change', async (e) => {
+        await saveBLEProfiles();
     });
 }
 
