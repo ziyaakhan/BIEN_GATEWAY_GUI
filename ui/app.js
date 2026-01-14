@@ -429,10 +429,12 @@ function addTelemetryItem() {
     renderTelemetryList();
 }
 
-function removeTelemetryItem(index) {
+// Global scope'ta olmalı (HTML onclick için)
+window.removeTelemetryItem = function(index) {
+    console.log('removeTelemetryItem çağrıldı, index:', index);
     currentTelemetryItems.splice(index, 1);
     renderTelemetryList();
-}
+};
 
 function renderTelemetryList() {
     const telemetryList = document.getElementById('ble-telemetry-list');
@@ -476,8 +478,15 @@ function renderTelemetryList() {
     });
 }
 
-function editBLEProfile(index) {
+// Global scope'ta olmalı (HTML onclick için)
+window.editBLEProfile = function(index) {
+    console.log('editBLEProfile çağrıldı, index:', index);
     const profile = bleProfiles[index];
+    if (!profile) {
+        console.error('Profil bulunamadı, index:', index);
+        return;
+    }
+    
     document.getElementById('ble-profile-id').value = index;
     document.getElementById('ble-profile-name').value = profile.name || '';
     document.getElementById('ble-profile-mac').value = profile.mac || '';
@@ -491,11 +500,14 @@ function editBLEProfile(index) {
     currentTelemetryItems = profile.telemetry ? [...profile.telemetry] : [];
     renderTelemetryList();
     
-    document.getElementById('ble-profile-form').style.display = 'block';
-    document.getElementById('delete-ble-profile').style.display = 'inline-block';
-}
+    const profileForm = document.getElementById('ble-profile-form');
+    const deleteBtn = document.getElementById('delete-ble-profile');
+    if (profileForm) profileForm.style.display = 'block';
+    if (deleteBtn) deleteBtn.style.display = 'inline-block';
+};
 
-function deleteBLEProfile(index) {
+window.deleteBLEProfile = function(index) {
+    console.log('deleteBLEProfile çağrıldı, index:', index);
     if (!confirm('Bu profili silmek istediğinize emin misiniz?')) {
         return;
     }
@@ -503,7 +515,7 @@ function deleteBLEProfile(index) {
     bleProfiles.splice(index, 1);
     updateBLEProfilesList();
     saveBLEProfiles();
-}
+};
 
 function clearBLEProfileForm() {
     document.getElementById('ble-profile-id').value = '';
@@ -547,9 +559,7 @@ async function saveBLEProfiles() {
 let bleSetupDone = false;
 
 function setupBLE() {
-    // Lazy initialization - sadece BLE section görünür olduğunda setup yap
-    if (bleSetupDone) return;
-    
+    // Element kontrolü - eğer yoksa, navigation değiştiğinde tekrar dene
     const scanBtn = document.getElementById('scan-ble');
     const addProfileBtn = document.getElementById('add-ble-profile');
     const saveProfileBtn = document.getElementById('save-ble-profile');
@@ -561,10 +571,18 @@ function setupBLE() {
     // Element kontrolü - eğer yoksa, navigation değiştiğinde tekrar dene
     if (!scanBtn || !addProfileBtn || !saveProfileBtn || !cancelProfileBtn || !deleteProfileBtn || !addTelemetryBtn || !bleEnabled) {
         console.log('BLE elementleri henüz yüklenmedi, navigation değiştiğinde tekrar deneniyor...');
+        bleSetupDone = false; // Flag'i sıfırla ki tekrar denesin
+        return;
+    }
+    
+    // Eğer zaten setup yapıldıysa tekrar yapma (event listener duplicate'lerini önlemek için)
+    if (bleSetupDone) {
+        console.log('BLE setup zaten yapıldı');
         return;
     }
     
     bleSetupDone = true;
+    console.log('BLE setup başlatılıyor...');
     
     // BLE tarama
     scanBtn.addEventListener('click', async () => {
@@ -745,18 +763,23 @@ window.selectWiFiNetwork = function(ssid, encrypted) {
 };
 
 function setupWiFi() {
-    // Lazy initialization - sadece WiFi section görünür olduğunda setup yap
-    if (wifiSetupDone) return;
-    
     const scanBtn = document.getElementById('scan-wifi');
     const saveBtn = document.getElementById('save-wifi');
     
     if (!scanBtn || !saveBtn) {
         console.log('WiFi elementleri henüz yüklenmedi, navigation değiştiğinde tekrar deneniyor...');
+        wifiSetupDone = false; // Flag'i sıfırla ki tekrar denesin
+        return;
+    }
+    
+    // Eğer zaten setup yapıldıysa tekrar yapma
+    if (wifiSetupDone) {
+        console.log('WiFi setup zaten yapıldı');
         return;
     }
     
     wifiSetupDone = true;
+    console.log('WiFi setup başlatılıyor...');
     
     scanBtn.addEventListener('click', async () => {
         try {
