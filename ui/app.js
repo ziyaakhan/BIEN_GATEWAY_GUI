@@ -238,6 +238,7 @@ async function loadConfig() {
             if (config.rs485.flow_control) document.getElementById('rs485-flow-control').value = config.rs485.flow_control;
             if (config.rs485.timeout) document.getElementById('rs485-timeout').value = config.rs485.timeout;
             if (config.rs485.direction_control) document.getElementById('rs485-direction-control').value = config.rs485.direction_control;
+            toggleRS485Settings(config.rs485.enabled || false);
         }
 
         // Modbus
@@ -257,6 +258,7 @@ async function loadConfig() {
         // BLE
         if (config.ble) {
             document.getElementById('ble-enabled').checked = config.ble.enabled || false;
+            toggleBLESettings(config.ble.enabled || false);
             
             if (config.ble.profiles) {
                 bleProfiles = config.ble.profiles;
@@ -267,6 +269,7 @@ async function loadConfig() {
         // LoRaWAN
         if (config.lorawan) {
             document.getElementById('lorawan-enabled').checked = config.lorawan.enabled || false;
+            toggleLoRaWANSettingsVisibility(config.lorawan.enabled || false);
             if (config.lorawan.gateway_id) document.getElementById('lorawan-gateway-id').value = config.lorawan.gateway_id;
             if (config.lorawan.forwarder_type) {
                 document.getElementById('lorawan-forwarder-type').value = config.lorawan.forwarder_type;
@@ -299,6 +302,13 @@ async function loadConfig() {
 // RS-485 Configuration
 // ============================================================================
 
+function toggleRS485Settings(enabled) {
+    const rs485Settings = document.getElementById('rs485-settings');
+    if (rs485Settings) {
+        rs485Settings.style.display = enabled ? 'block' : 'none';
+    }
+}
+
 function toggleModbusSettings(enabled) {
     const modbusSettings = document.getElementById('modbus-settings');
     modbusSettings.style.display = enabled ? 'block' : 'none';
@@ -307,6 +317,15 @@ function toggleModbusSettings(enabled) {
 function setupRS485() {
     const saveBtn = document.getElementById('save-rs485');
     const modbusEnabled = document.getElementById('modbus-enabled');
+    const rs485Enabled = document.getElementById('rs485-enabled');
+    
+    if (rs485Enabled) {
+        // İlk yüklemede mevcut duruma göre göster/gizle
+        toggleRS485Settings(rs485Enabled.checked);
+        rs485Enabled.addEventListener('change', (e) => {
+            toggleRS485Settings(e.target.checked);
+        });
+    }
     
     modbusEnabled.addEventListener('change', (e) => {
         toggleModbusSettings(e.target.checked);
@@ -367,6 +386,13 @@ async function saveModbusConfig() {
 // ============================================================================
 // BLE Configuration
 // ============================================================================
+
+function toggleBLESettings(enabled) {
+    const bleSettings = document.getElementById('ble-settings');
+    if (bleSettings) {
+        bleSettings.style.display = enabled ? 'block' : 'none';
+    }
+}
 
 let bleProfiles = [];
 let currentTelemetryItems = [];
@@ -707,6 +733,7 @@ function setupBLE() {
     
     // BLE enabled toggle
     bleEnabled.addEventListener('change', async (e) => {
+        toggleBLESettings(e.target.checked);
         await saveBLEProfiles();
     });
 }
@@ -714,6 +741,13 @@ function setupBLE() {
 // ============================================================================
 // LoRaWAN Configuration
 // ============================================================================
+
+function toggleLoRaWANSettingsVisibility(enabled) {
+    const lorawanSettings = document.getElementById('lorawan-settings');
+    if (lorawanSettings) {
+        lorawanSettings.style.display = enabled ? 'block' : 'none';
+    }
+}
 
 function toggleForwarderSettings(type) {
     const mqttSettings = document.getElementById('mqtt-forwarder-settings');
@@ -731,6 +765,15 @@ function toggleForwarderSettings(type) {
 function setupLoRaWAN() {
     const saveBtn = document.getElementById('save-lorawan');
     const forwarderType = document.getElementById('lorawan-forwarder-type');
+    const lorawanEnabled = document.getElementById('lorawan-enabled');
+    
+    if (lorawanEnabled) {
+        // İlk yüklemede mevcut duruma göre göster/gizle
+        toggleLoRaWANSettingsVisibility(lorawanEnabled.checked);
+        lorawanEnabled.addEventListener('change', (e) => {
+            toggleLoRaWANSettingsVisibility(e.target.checked);
+        });
+    }
     
     forwarderType.addEventListener('change', (e) => {
         toggleForwarderSettings(e.target.value);
