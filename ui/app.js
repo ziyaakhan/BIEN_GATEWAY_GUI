@@ -298,7 +298,15 @@ function toggleRS485Settings(enabled) {
 
 function toggleModbusSettings(enabled) {
     const modbusSettings = document.getElementById('modbus-settings');
-    modbusSettings.style.display = enabled ? 'block' : 'none';
+    const modbusBody = document.getElementById('rs485-settings');
+    
+    if (modbusBody) {
+        modbusBody.style.display = enabled ? 'block' : 'none';
+    }
+    
+    if (modbusSettings) {
+        modbusSettings.style.display = enabled ? 'block' : 'none';
+    }
 }
 
 function setupRS485() {
