@@ -500,3 +500,14 @@ body {
     text-align: center;
     margin-top: 10px;
 }
+
+.modbus-profile-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.modbus-profile-actions .btn {
+    width: auto;
+    padding: 8px 20px;
+}

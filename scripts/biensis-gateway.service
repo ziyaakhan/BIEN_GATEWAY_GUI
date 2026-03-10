@@ -1,0 +1,17 @@
+[Unit]
+Description=Biensis Gateway GUI
+After=network.target NetworkManager.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=biensis-rpi
+WorkingDirectory=/home/biensis-rpi/BIEN_GATEWAY_GUI
+ExecStartPre=/bin/bash -c 'sudo iptables -t nat -C PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8000 2>/dev/null || sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8000'
+ExecStart=/bin/bash -c 'source venv/bin/activate && uvicorn api.main:app --host 0.0.0.0 --port 8000'
+Restart=always
+RestartSec=5
+Environment=PATH=/home/biensis-rpi/BIEN_GATEWAY_GUI/venv/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=multi-user.target

@@ -52,15 +52,9 @@
     "mqtt_json": false
   },
   "wifi": {
-    "networks": [
-      {
-        "ssid": "FiberHGW_ZTR9CY",
-        "signal": 67,
-        "encrypted": true
-      }
-    ],
     "country": "TR",
-    "ssid": "FiberHGW_ZTR9CY",
-    "password": ""
+    "ssid": "",
+    "password": "",
+    "networks": []
   }
 }

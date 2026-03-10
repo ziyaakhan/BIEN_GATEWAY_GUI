@@ -1,187 +1,123 @@
-# Gateway Konfigürasyon Projesi
+# Biensis Gateway GUI
 
-Gateway cihazınızı tarayıcı üzerinden yönetmek için modern bir web arayüzü.
+Raspberry Pi tabanlı IoT gateway cihazı için web arayüzlü konfigürasyon paneli.
+Modbus, BLE, LoRaWAN ve WiFi ayarlarını tarayıcı üzerinden yönetir.
 
-## Özellikler
+## Mimari
 
-- 🔐 Güvenli login sistemi
-- 📡 RS-485 konfigürasyonu
-- 🔵 BLE (Bluetooth Low Energy) ayarları
-- 📶 LoRaWAN konfigürasyonu
-- ⚙️ Sistem yönetimi
-- 🎨 Modern, kullanıcı dostu arayüz
-
-## Kurulum
-
-### 1. Gerekli Paketlerin Yüklenmesi
-
-```bash
-# Sanal ortam oluştur (önerilen)
-python -m venv venv
-
-# Windows
-venv\Scripts\activate
-
-# Linux/Mac
-source venv/bin/activate
-
-# Bağımlılıkları yükle
-pip install -r requirements.txt
+```
+Backend:   FastAPI (Python) + Uvicorn
+Frontend:  HTML / CSS / JavaScript (framework yok)
+Donanım:   Raspberry Pi (Seeed WM1302 LoRa HAT, BLE, RS-485)
+Erişim:    http://<gateway-ip>  (port 80 → 8000 yönlendirmeli)
 ```
 
-### 2. Uygulamayı Başlatma
+## Proje Yapısı
+
+```
+BIEN_GATEWAY_GUI/
+├── api/
+│   └── main.py                  # FastAPI uygulaması, tüm API endpoint'leri
+├── ui/
+│   ├── index.html               # Tek sayfa web arayüzü
+│   ├── app.js                   # Frontend logic ve API iletişimi
+│   └── style.css                # Arayüz stilleri
+├── config/
+│   ├── gateway.json             # Aktif gateway konfigürasyonu
+│   ├── factory_default.json     # Fabrika ayarları (reset için)
+│   ├── users.json               # Kullanıcı bilgileri (otomatik oluşur)
+│   └── sessions.json            # Oturum verileri (otomatik oluşur)
+├── scripts/
+│   ├── biensis-gateway.service  # systemd servis dosyası
+│   └── ap_mode.sh               # WiFi bağlanamazsa hotspot aç
+├── gui_launch.sh                # Manuel başlatma scripti
+└── requirements.txt             # Python bağımlılıkları
+```
+
+**Pi'deki ek dosyalar:**
+
+```
+~/ble_gateway/
+└── main.py                      # BLE cihaz okuma + MQTT publish scripti
+```
+
+## Hızlı Başlangıç (Geliştirme)
 
 ```bash
-# Development modunda
-python api/main.py
-
-# veya uvicorn ile
+python -m venv venv
+source venv/bin/activate          # Windows: venv\Scripts\activate
+pip install -r requirements.txt
 uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### 3. Tarayıcıdan Erişim
+Tarayıcı: `http://localhost:8000` | Giriş: `admin` / `admin`
 
-Tarayıcınızda şu adresi açın:
-```
-http://localhost:8000
-```
+## Modüller
 
-veya yerel ağdan:
-```
-http://<gateway-ip>:8000
-```
+### Modbus
+- Profil bazlı konfigürasyon (seri port, baud rate, parity, vb.)
+- MQTT forward ayarları (sunucu, port, access token)
+- Profiller eklenebilir, düzenlenebilir, silinebilir
 
-## Varsayılan Giriş Bilgileri
+### BLE (Bluetooth Low Energy)
+- Profil bazlı cihaz yönetimi (MAC, characteristic UUID, telemetri ifadeleri)
+- Cihaz tarama (bluetoothctl / hcitool)
+- Bağlantı durumu takibi (son 2 dk veri alındıysa "Bağlı")
+- MQTT forward ayarları
+- `~/ble_gateway/main.py` ile bağlan-oku-kopar döngüsü
 
-- **Kullanıcı Adı:** admin
-- **Şifre:** admin
+### LoRaWAN
+- ChirpStack Concentratord ayarları (`/etc/chirpstack-concentratord/sx1302.toml`)
+- ChirpStack MQTT Forwarder ayarları (`/etc/chirpstack-mqtt-forwarder/chirpstack-mqtt-forwarder.toml`)
+- Kaydet deyince TOML dosyaları yazılır, servisler restart edilir
+- Region, Gateway ID, anten kazancı, konum, MQTT server/port
 
-⚠️ **Önemli:** İlk girişten sonra şifrenizi değiştirmeyi unutmayın!
+### WiFi
+- Ağ tarama (nmcli)
+- SSID/şifre ile bağlantı
+- AP modu: bağlanamazsa "Biensis-Gateway" hotspot açar
 
-## Dizin Yapısı
+### Sistem
+- Sistem durumu (CPU, RAM, disk, sıcaklık, uptime)
+- Gateway yeniden başlatma
+- Fabrika ayarlarına dönme
+- Şifre değiştirme
 
-```
-gateway-gui/
-├── api/
-│   └── main.py              # FastAPI backend
-├── ui/
-│   ├── index.html           # Ana HTML
-│   ├── style.css            # Stil dosyası
-│   └── app.js               # Frontend JavaScript
-├── config/
-│   ├── users.json           # Kullanıcı bilgileri (otomatik oluşturulur)
-│   └── gateway.json         # Gateway konfigürasyonu (otomatik oluşturulur)
-├── requirements.txt         # Python bağımlılıkları
-└── README.md               # Bu dosya
-```
+## API Endpoint'leri
 
-## API Endpoints
+| Method | Endpoint                     | Açıklama                          |
+|--------|------------------------------|-----------------------------------|
+| POST   | `/api/login`                 | Oturum aç                         |
+| POST   | `/api/logout`                | Oturum kapat                      |
+| GET    | `/api/config`                | Tüm konfigürasyonu getir          |
+| POST   | `/api/config/modbus`         | Modbus ayarlarını kaydet           |
+| POST   | `/api/config/modbus/profiles`| Modbus profillerini kaydet         |
+| POST   | `/api/config/modbus/mqtt`    | Modbus MQTT ayarlarını kaydet      |
+| POST   | `/api/config/ble`            | BLE ayarlarını kaydet              |
+| POST   | `/api/config/ble/profiles`   | BLE profillerini kaydet            |
+| POST   | `/api/config/ble/mqtt`       | BLE MQTT ayarlarını kaydet         |
+| POST   | `/api/ble/scan`              | BLE cihazlarını tara               |
+| POST   | `/api/ble/status`            | BLE cihaz bağlantı durumları       |
+| POST   | `/api/config/lorawan`        | LoRaWAN ayarları + TOML yaz        |
+| POST   | `/api/config/wifi`           | WiFi bağlantısı kur                |
+| POST   | `/api/wifi/scan`             | WiFi ağlarını tara                 |
+| GET    | `/api/wifi/status`           | WiFi bağlantı durumu               |
+| POST   | `/api/config/system`         | Sistem ayarlarını kaydet           |
+| GET    | `/api/system/status`         | Sistem metrikleri                  |
+| POST   | `/api/system/restart`        | Cihazı yeniden başlat              |
+| POST   | `/api/system/factory-reset`  | Fabrika ayarlarına dön             |
+| POST   | `/api/user/change-password`  | Şifre değiştir                     |
 
-### Authentication
-- `POST /api/login` - Giriş yap
-- `POST /api/logout` - Çıkış yap
+## Konfigürasyon Yapısı (gateway.json)
 
-### Configuration
-- `GET /api/config` - Tüm konfigürasyonu getir
-- `POST /api/config/rs485` - RS-485 ayarlarını güncelle
-- `POST /api/config/ble` - BLE ayarlarını güncelle
-- `POST /api/config/lorawan` - LoRaWAN ayarlarını güncelle
-- `POST /api/config/system` - Sistem ayarlarını güncelle
-
-### System
-- `POST /api/system/restart` - Gateway'i yeniden başlat
-- `GET /api/health` - Health check
-
-## Production Deployment (Raspberry Pi)
-
-### Systemd Servis Oluşturma
-
-1. Servis dosyası oluştur:
-
-```bash
-sudo nano /etc/systemd/system/gateway-api.service
-```
-
-2. Aşağıdaki içeriği ekle:
-
-```ini
-[Unit]
-Description=Gateway Configuration API
-After=network.target
-
-[Service]
-Type=simple
-User=pi
-WorkingDirectory=/opt/gateway
-Environment="PATH=/opt/gateway/venv/bin"
-ExecStart=/opt/gateway/venv/bin/uvicorn api.main:app --host 0.0.0.0 --port 8000
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-3. Servisi etkinleştir ve başlat:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable gateway-api
-sudo systemctl start gateway-api
-```
-
-4. Servis durumunu kontrol et:
-
-```bash
-sudo systemctl status gateway-api
-```
-
-## Geliştirme
-
-### Backend Değişiklikleri
-
-Backend değişiklikleri için `api/main.py` dosyasını düzenleyin. Uvicorn `--reload` flag'i ile çalışıyorsa değişiklikler otomatik yüklenecektir.
-
-### Frontend Değişiklikleri
-
-UI dosyalarını (`ui/` klasöründe) düzenleyin. Tarayıcıyı yenileyerek değişiklikleri görebilirsiniz.
-
-## Güvenlik Notları
-
-1. **Şifre Hashleme:** Production ortamında şifrelerin hash'lenmesi önerilir (örn: bcrypt)
-2. **HTTPS:** Production'da HTTPS kullanın (nginx reverse proxy ile)
-3. **CORS:** Production'da CORS ayarlarını sınırlandırın
-4. **Firewall:** Sadece güvenli ağlardan erişime izin verin
-
-## Sorun Giderme
-
-### Port zaten kullanımda
-```bash
-# Port 8000'i kullanan process'i bul
-lsof -i :8000
-
-# veya Windows'ta
-netstat -ano | findstr :8000
-```
-
-### Config dosyaları oluşturulmuyor
-```bash
-# Config klasörünün yazma izni olduğundan emin olun
-chmod 755 config/
-```
-
-### Static dosyalar yüklenmiyor
-- `ui/` klasörünün doğru konumda olduğundan emin olun
-- Tarayıcı konsolunu kontrol edin (F12)
-
-## Lisans
-
-MIT License
-
-## Katkıda Bulunma
-
-1. Fork edin
-2. Feature branch oluşturun (`git checkout -b feature/amazing-feature`)
-3. Commit edin (`git commit -m 'Add amazing feature'`)
-4. Push edin (`git push origin feature/amazing-feature`)
-5. Pull Request açın
+```json
+{
+  "gateway_name": "Gateway-01",
+  "modbus":          { "enabled": false, ... },
+  "modbus_profiles": [ ... ],
+  "modbus_mqtt":     { "host": "", "port": 1883, "token": "" },
+  "ble":             { "enabled": false, "profiles": [ ... ] },
+  "ble_mqtt":        { "host": "", "port": 1883, "token": "" },
+  "lorawan":         { "enabled": false, "gateway_id": "", "region": "EU868", ... },
+  "wifi":            { "country": "TR", "ssid": "", "password": "" }
+}

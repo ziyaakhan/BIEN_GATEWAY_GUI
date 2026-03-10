@@ -72,6 +72,40 @@
                     <div id="section-system" class="section active">
                         <div class="card">
                             <div class="card-header">
+                                <h3>Sistem Durumu</h3>
+                            </div>
+                            <div class="card-body" id="system-status-panel">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                    <div class="status-item" style="padding: 12px; border: 1px solid #e1e8ed; border-radius: 4px; background: #f8f9fa;">
+                                        <small style="color: #7f8c8d;">IP Adresi</small><br>
+                                        <strong id="sys-ip">-</strong>
+                                    </div>
+                                    <div class="status-item" style="padding: 12px; border: 1px solid #e1e8ed; border-radius: 4px; background: #f8f9fa;">
+                                        <small style="color: #7f8c8d;">Çalışma Süresi</small><br>
+                                        <strong id="sys-uptime">-</strong>
+                                    </div>
+                                    <div class="status-item" style="padding: 12px; border: 1px solid #e1e8ed; border-radius: 4px; background: #f8f9fa;">
+                                        <small style="color: #7f8c8d;">CPU Yükü</small><br>
+                                        <strong id="sys-cpu">-</strong>
+                                    </div>
+                                    <div class="status-item" style="padding: 12px; border: 1px solid #e1e8ed; border-radius: 4px; background: #f8f9fa;">
+                                        <small style="color: #7f8c8d;">RAM Kullanımı</small><br>
+                                        <strong id="sys-ram">-</strong>
+                                    </div>
+                                    <div class="status-item" style="padding: 12px; border: 1px solid #e1e8ed; border-radius: 4px; background: #f8f9fa;">
+                                        <small style="color: #7f8c8d;">Disk Kullanımı</small><br>
+                                        <strong id="sys-disk">-</strong>
+                                    </div>
+                                    <div class="status-item" style="padding: 12px; border: 1px solid #e1e8ed; border-radius: 4px; background: #f8f9fa;">
+                                        <small style="color: #7f8c8d;">Sıcaklık</small><br>
+                                        <strong id="sys-temp">-</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
                                 <h3>Sistem Ayarları</h3>
                             </div>
                             <div class="card-body">
@@ -111,9 +145,13 @@
                                 <h3>Gateway İşlemleri</h3>
                             </div>
                             <div class="card-body">
-                                <button id="restart-gateway" class="btn btn-danger">Gateway'i Yeniden Başlat</button>
+                                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                    <button id="restart-gateway" class="btn btn-danger" style="width: auto;">Gateway'i Yeniden Başlat</button>
+                                    <button id="factory-reset" class="btn btn-danger" style="width: auto;">Fabrika Ayarlarına Dön</button>
+                                </div>
                                 <p class="text-muted" style="margin-top: 10px;">
-                                    Bu işlem gateway'i yeniden başlatacaktır.
+                                    <strong>Yeniden Başlat:</strong> Cihazı yeniden başlatır.<br>
+                                    <strong>Fabrika Ayarları:</strong> Tüm ayarları sıfırlar, şifreyi admin/admin yapar.
                                 </p>
                             </div>
                         </div>
@@ -130,12 +168,89 @@
                                 </div>
                             </div>
                             <div class="card-body" id="rs485-settings" style="display: none;">
+                                <h4 style="margin-bottom: 15px;">MQTT Forward Ayarları</h4>
+                                <div class="form-row">
+                                    <div class="form-group" style="flex: 2;">
+                                        <label for="modbus-mqtt-host">MQTT Server</label>
+                                        <input type="text" id="modbus-mqtt-host" class="form-control" placeholder="Örn: mqtt.example.com" value="">
+                                    </div>
+                                    <div class="form-group" style="flex: 1;">
+                                        <label for="modbus-mqtt-port">MQTT Port</label>
+                                        <input type="number" id="modbus-mqtt-port" class="form-control" min="1" max="65535" value="1883">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="modbus-mqtt-token">Access Token</label>
+                                    <input type="text" id="modbus-mqtt-token" class="form-control" placeholder="Cihaz Access Token">
+                                </div>
+                                <button id="save-modbus-mqtt" class="btn btn-primary" style="margin-bottom: 15px;">MQTT Ayarlarını Kaydet</button>
+                                <div id="modbus-mqtt-message" class="message"></div>
+                                <hr>
                                 <h4 style="margin-bottom: 15px;">Modbus Profilleri</h4>
                                 <div id="modbus-profiles-list" class="device-list" style="margin-bottom: 15px;">
                                     <p class="text-muted">Henüz profil yok</p>
                                 </div>
+                                <div class="form-group">
+                                    <button id="add-modbus-profile" class="btn btn-secondary">Yeni Profil Ekle</button>
+                                </div>
                                 
-                                <div id="modbus-settings" style="display: none;">
+                                <div id="modbus-profile-form" style="display: none;">
+                                    <hr>
+                                    <h4 style="margin-bottom: 15px;">Profil Ayarları</h4>
+                                    <input type="hidden" id="modbus-profile-id">
+                                    <div class="form-group">
+                                        <label for="modbus-profile-name">Profil Adı</label>
+                                        <input type="text" id="modbus-profile-name" class="form-control" placeholder="Örn: Sensör Grubu 1">
+                                    </div>
+                                    <hr>
+                                    <h5 style="margin-bottom: 15px;">Seri Port Ayarları</h5>
+                                    <div class="form-group">
+                                        <label for="modbus-serial-port">Seri Port</label>
+                                        <input type="text" id="modbus-serial-port" class="form-control" placeholder="/dev/ttyUSB0" value="/dev/ttyUSB0">
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="modbus-baudrate">Baud Rate</label>
+                                            <select id="modbus-baudrate" class="form-control">
+                                                <option value="4800">4800</option>
+                                                <option value="9600" selected>9600</option>
+                                                <option value="19200">19200</option>
+                                                <option value="38400">38400</option>
+                                                <option value="57600">57600</option>
+                                                <option value="115200">115200</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="modbus-parity">Parity</label>
+                                            <select id="modbus-parity" class="form-control">
+                                                <option value="none" selected>None</option>
+                                                <option value="even">Even</option>
+                                                <option value="odd">Odd</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="modbus-data-bits">Data Bits</label>
+                                            <select id="modbus-data-bits" class="form-control">
+                                                <option value="7">7</option>
+                                                <option value="8" selected>8</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="modbus-stop-bits">Stop Bits</label>
+                                            <select id="modbus-stop-bits" class="form-control">
+                                                <option value="1" selected>1</option>
+                                                <option value="2">2</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="modbus-timeout">Timeout (ms)</label>
+                                            <input type="number" id="modbus-timeout" class="form-control" min="100" max="10000" value="1000">
+                                        </div>
+                                    </div>
+                                    <hr>
+                                    <h5 style="margin-bottom: 15px;">Modbus Ayarları</h5>
                                     <div class="form-row">
                                         <div class="form-group">
                                             <label for="modbus-slave-id">Address/Slave ID</label>
@@ -187,9 +302,13 @@
                                             </select>
                                         </div>
                                     </div>
-                                    <button id="save-rs485" class="btn btn-primary">Kaydet</button>
-                                    <div id="rs485-message" class="message"></div>
+                                    <div class="form-group modbus-profile-actions">
+                                        <button id="save-modbus-profile" class="btn btn-primary">Profili Kaydet</button>
+                                        <button id="cancel-modbus-profile" class="btn btn-secondary">İptal</button>
+                                        <button id="delete-modbus-profile" class="btn btn-danger" style="display: none;">Profili Sil</button>
+                                    </div>
                                 </div>
+                                <div id="rs485-message" class="message"></div>
                             </div>
                         </div>
                     </div>
@@ -205,15 +324,31 @@
                                 </div>
                             </div>
                             <div class="card-body" id="ble-settings">
-                                <!-- BLE Tarama -->
-                                <div class="form-group">
-                                    <button id="scan-ble" class="btn btn-secondary">BLE Cihazlarını Tara</button>
+                                <h4 style="margin-bottom: 15px;">MQTT Forward Ayarları</h4>
+                                <div class="form-row">
+                                    <div class="form-group" style="flex: 2;">
+                                        <label for="ble-mqtt-host">MQTT Server</label>
+                                        <input type="text" id="ble-mqtt-host" class="form-control" placeholder="Örn: mqtt.example.com" value="">
+                                    </div>
+                                    <div class="form-group" style="flex: 1;">
+                                        <label for="ble-mqtt-port">MQTT Port</label>
+                                        <input type="number" id="ble-mqtt-port" class="form-control" min="1" max="65535" value="1883">
+                                    </div>
                                 </div>
+                                <div class="form-group">
+                                    <label for="ble-mqtt-token">Access Token</label>
+                                    <input type="text" id="ble-mqtt-token" class="form-control" placeholder="Cihaz Access Token">
+                                </div>
+                                <button id="save-ble-mqtt" class="btn btn-primary" style="margin-bottom: 15px;">MQTT Ayarlarını Kaydet</button>
+                                <div id="ble-mqtt-message" class="message"></div>
+                                <hr>
+                                <!-- BLE Tarama -->
                                 <div class="form-group">
                                     <label>Taranan BLE Cihazları</label>
                                     <div id="ble-scanned-devices" class="device-list" style="max-height: 200px; overflow-y: auto;">
-                                        <p class="text-muted">BLE cihazlarını taramak için yukarıdaki butona tıklayın</p>
+                                        <p class="text-muted">BLE cihazlarını taramak için aşağıdaki butona tıklayın</p>
                                     </div>
+                                    <button id="scan-ble" class="btn btn-secondary" style="margin-top: 10px; width: auto;">BLE Cihazlarını Tara</button>
                                 </div>
                                 <hr>
                                 
@@ -273,12 +408,12 @@
                                         <p class="text-muted">Henüz telemetry eklenmedi</p>
                                     </div>
                                     
-                                    <div class="form-group ble-profile-actions">
-                                        <button type="button" id="add-telemetry" class="btn btn-secondary">Telemetry Ekle</button>
+                                    <div class="form-group">
+                                        <button type="button" id="add-telemetry" class="btn btn-secondary" style="width: auto; padding: 8px 20px;">Telemetry Ekle</button>
+                                    </div>
+                                    <div class="form-group modbus-profile-actions">
                                         <button id="save-ble-profile" class="btn btn-primary">Profili Kaydet</button>
                                         <button id="cancel-ble-profile" class="btn btn-secondary">İptal</button>
-                                    </div>
-                                    <div class="form-group ble-profile-delete">
                                         <button id="delete-ble-profile" class="btn btn-danger" style="display: none;">Profili Sil</button>
                                     </div>
                                 </div>
@@ -299,37 +434,67 @@
                                 </div>
                             </div>
                             <div class="card-body" id="lorawan-settings">
+                                <h4 style="margin-bottom: 15px;">Concentratord Ayarları</h4>
                                 <div class="form-group">
                                     <label for="lorawan-gateway-id">Gateway ID</label>
-                                    <input type="text" id="lorawan-gateway-id" class="form-control" placeholder="Gateway ID">
+                                    <input type="text" id="lorawan-gateway-id" class="form-control" placeholder="Örn: 826eb946714a624f">
                                 </div>
-                                <hr>
-                                <h4 style="margin-bottom: 15px;">Forwarder Ayarları</h4>
-                                <div class="form-group">
-                                    <label for="lorawan-forwarder-type">Forwarder Tipi</label>
-                                    <select id="lorawan-forwarder-type" class="form-control">
-                                        <option value="mqtt" selected>MQTT Forwarder</option>
-                                        <option value="udp">UDP Forwarder</option>
-                                    </select>
-                                </div>
-                                <div id="mqtt-forwarder-settings">
+                                <div class="form-row">
                                     <div class="form-group">
-                                        <label for="lorawan-mqtt-server">MQTT Server</label>
-                                        <input type="text" id="lorawan-mqtt-server" class="form-control" placeholder="mqtt.example.com">
+                                        <label for="lorawan-region">Region</label>
+                                        <select id="lorawan-region" class="form-control">
+                                            <option value="EU868" selected>EU868</option>
+                                            <option value="US915">US915</option>
+                                            <option value="CN470">CN470</option>
+                                            <option value="AS923">AS923</option>
+                                            <option value="AU915">AU915</option>
+                                            <option value="KR920">KR920</option>
+                                            <option value="IN865">IN865</option>
+                                            <option value="RU864">RU864</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="lorawan-antenna-gain">Anten Kazancı (dBi)</label>
+                                        <input type="number" id="lorawan-antenna-gain" class="form-control" min="0" max="30" value="0">
                                     </div>
                                     <div class="form-group">
+                                        <label for="lorawan-log-level">Log Level</label>
+                                        <select id="lorawan-log-level" class="form-control">
+                                            <option value="INFO" selected>INFO</option>
+                                            <option value="DEBUG">DEBUG</option>
+                                            <option value="WARN">WARN</option>
+                                            <option value="ERROR">ERROR</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <h5 style="margin: 15px 0 10px;">Konum</h5>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="lorawan-latitude">Enlem</label>
+                                        <input type="text" id="lorawan-latitude" class="form-control" placeholder="40.981928" value="0">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="lorawan-longitude">Boylam</label>
+                                        <input type="text" id="lorawan-longitude" class="form-control" placeholder="29.226201" value="0">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="lorawan-altitude">Yükseklik (m)</label>
+                                        <input type="number" id="lorawan-altitude" class="form-control" value="0">
+                                    </div>
+                                </div>
+
+                                <hr>
+                                <h4 style="margin-bottom: 15px;">MQTT Forwarder Ayarları</h4>
+                                <div class="form-row">
+                                    <div class="form-group" style="flex: 2;">
+                                        <label for="lorawan-mqtt-server">MQTT Server</label>
+                                        <input type="text" id="lorawan-mqtt-server" class="form-control" placeholder="Örn: 38.242.202.86" value="">
+                                    </div>
+                                    <div class="form-group" style="flex: 1;">
                                         <label for="lorawan-mqtt-port">MQTT Port</label>
                                         <input type="number" id="lorawan-mqtt-port" class="form-control" min="1" max="65535" value="1883">
-                                    </div>
-                                </div>
-                                <div id="udp-forwarder-settings" style="display: none;">
-                                    <div class="form-group">
-                                        <label for="lorawan-udp-server">UDP Server</label>
-                                        <input type="text" id="lorawan-udp-server" class="form-control" placeholder="192.168.1.100">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="lorawan-udp-port">UDP Port</label>
-                                        <input type="number" id="lorawan-udp-port" class="form-control" min="1" max="65535" value="1700">
                                     </div>
                                 </div>
                                 <button id="save-lorawan" class="btn btn-primary">Kaydet</button>
@@ -346,13 +511,11 @@
                             </div>
                             <div class="card-body">
                                 <div class="form-group">
-                                    <button id="scan-wifi" class="btn btn-secondary">WiFi Ağlarını Tara</button>
-                                </div>
-                                <div class="form-group">
                                     <label>Bulunan WiFi Ağları</label>
                                     <div id="wifi-networks" class="device-list">
-                                        <p class="text-muted">WiFi ağlarını taramak için yukarıdaki butona tıklayın</p>
+                                        <p class="text-muted">WiFi ağlarını taramak için aşağıdaki butona tıklayın</p>
                                     </div>
+                                    <button id="scan-wifi" class="btn btn-secondary" style="margin-top: 10px; width: auto;">WiFi Ağlarını Tara</button>
                                 </div>
                                 <hr>
                                 <h4 style="margin-bottom: 15px;">WiFi Bağlantı Ayarları</h4>
@@ -449,9 +612,13 @@
                                 <h3>Gateway İşlemleri</h3>
                             </div>
                             <div class="card-body">
-                                <button id="restart-gateway" class="btn btn-danger">Gateway'i Yeniden Başlat</button>
+                                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                    <button id="restart-gateway" class="btn btn-danger" style="width: auto;">Gateway'i Yeniden Başlat</button>
+                                    <button id="factory-reset" class="btn btn-danger" style="width: auto;">Fabrika Ayarlarına Dön</button>
+                                </div>
                                 <p class="text-muted" style="margin-top: 10px;">
-                                    Bu işlem gateway'i yeniden başlatacaktır.
+                                    <strong>Yeniden Başlat:</strong> Cihazı yeniden başlatır.<br>
+                                    <strong>Fabrika Ayarları:</strong> Tüm ayarları sıfırlar, şifreyi admin/admin yapar.
                                 </p>
                             </div>
                         </div>

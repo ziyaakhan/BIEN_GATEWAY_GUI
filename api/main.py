@@ -31,6 +31,7 @@ UI_DIR = BASE_DIR / "ui"
 CONFIG_DIR = BASE_DIR / "config"
 USERS_FILE = CONFIG_DIR / "users.json"
 GATEWAY_CONFIG_FILE = CONFIG_DIR / "gateway.json"
+FACTORY_DEFAULT_FILE = CONFIG_DIR / "factory_default.json"
 
 # Ensure config directory exists
 CONFIG_DIR.mkdir(exist_ok=True)
@@ -47,8 +48,43 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Session storage (in-memory, simple approach)
+# Session storage (file-backed so sessions survive restarts)
+SESSIONS_FILE = CONFIG_DIR / "sessions.json"
 sessions = {}
+
+
+def load_sessions():
+    global sessions
+    try:
+        if SESSIONS_FILE.exists():
+            with open(SESSIONS_FILE, "r") as f:
+                raw = json.load(f)
+            now = datetime.now()
+            sessions = {}
+            for sid, data in raw.items():
+                exp = datetime.fromisoformat(data["expires"])
+                if now < exp:
+                    data["expires"] = exp
+                    sessions[sid] = data
+    except Exception:
+        sessions = {}
+
+
+def save_sessions():
+    try:
+        raw = {}
+        for sid, data in sessions.items():
+            raw[sid] = {
+                "username": data["username"],
+                "expires": data["expires"].isoformat()
+            }
+        with open(SESSIONS_FILE, "w") as f:
+            json.dump(raw, f)
+    except Exception:
+        pass
+
+
+load_sessions()
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -116,11 +152,17 @@ def load_gateway_config():
             "lorawan": {
                 "enabled": False,
                 "gateway_id": "",
-                "forwarder_type": "mqtt",
+                "region": "EU868",
+                "model": "seeed_wm1302",
+                "antenna_gain": 0,
+                "log_level": "INFO",
+                "latitude": 0,
+                "longitude": 0,
+                "altitude": 0,
                 "mqtt_server": "",
                 "mqtt_port": 1883,
-                "udp_server": "",
-                "udp_port": 1700
+                "topic_prefix": "eu868",
+                "mqtt_json": False
             },
             "wifi": {
                 "country": "TR",
@@ -172,9 +214,9 @@ def get_session_user(request: Request):
         return None
     
     session = sessions[session_id]
-    # Check if session expired (24 hours)
     if datetime.now() > session["expires"]:
         del sessions[session_id]
+        save_sessions()
         return None
     
     return session["username"]
@@ -191,7 +233,7 @@ def scan_wifi_networks():
         # Önce nmcli ile dene (NetworkManager kullanıyorsa)
         try:
             result = subprocess.run(
-                ['nmcli', '-t', '-f', 'SSID,SIGNAL,SECURITY', 'dev', 'wifi', 'list'],
+                ['nmcli', '-t', '-f', 'SSID,SIGNAL,SECURITY', 'dev', 'wifi', 'list', '--rescan', 'yes'],
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -379,6 +421,12 @@ class ModbusProfilesRequest(BaseModel):
     profiles: List[dict]
 
 
+class MQTTForwardConfig(BaseModel):
+    host: str = ""
+    port: int = 1883
+    token: str = ""
+
+
 class BLEConfig(BaseModel):
     enabled: bool
     server_mac: Optional[str] = ""
@@ -405,12 +453,18 @@ class BLEConfig(BaseModel):
 
 class LoRaWANConfig(BaseModel):
     enabled: bool
-    gateway_id: str
-    forwarder_type: str  # mqtt or udp
-    mqtt_server: Optional[str] = ""
-    mqtt_port: Optional[int] = 1883
-    udp_server: Optional[str] = ""
-    udp_port: Optional[int] = 1700
+    gateway_id: str = ""
+    region: str = "EU868"
+    model: str = "seeed_wm1302"
+    antenna_gain: int = 0
+    log_level: str = "INFO"
+    latitude: float = 0
+    longitude: float = 0
+    altitude: int = 0
+    mqtt_server: str = ""
+    mqtt_port: int = 1883
+    topic_prefix: str = "eu868"
+    mqtt_json: bool = False
 
 
 class WiFiConfig(BaseModel):
@@ -460,21 +514,20 @@ async def login(credentials: LoginRequest, response: Response):
     if user["password"] != credentials.password:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    # Create session
     session_id = secrets.token_urlsafe(32)
     sessions[session_id] = {
         "username": credentials.username,
         "expires": datetime.now() + timedelta(hours=24)
     }
-    
-    # Set cookie
+    save_sessions()
+
     response.set_cookie(
         key="session_id",
         value=session_id,
         httponly=True,
-        max_age=86400  # 24 hours
+        max_age=86400
     )
-    
+
     return {"status": "success", "username": credentials.username}
 
 
@@ -484,7 +537,8 @@ async def logout(request: Request, response: Response):
     session_id = request.cookies.get("session_id")
     if session_id in sessions:
         del sessions[session_id]
-    
+        save_sessions()
+
     response.delete_cookie("session_id")
     return {"status": "success"}
 
@@ -540,6 +594,34 @@ async def update_modbus_profiles(request_data: ModbusProfilesRequest, request: R
     save_gateway_config(gateway_config)
     
     return {"status": "success", "profiles": request_data.profiles}
+
+
+@app.post("/api/config/modbus/mqtt")
+async def update_modbus_mqtt(config: MQTTForwardConfig, request: Request):
+    """Update Modbus MQTT forward settings"""
+    user = get_session_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    gateway_config = load_gateway_config()
+    gateway_config["modbus_mqtt"] = config.dict()
+    save_gateway_config(gateway_config)
+    
+    return {"status": "success", "config": config.dict()}
+
+
+@app.post("/api/config/ble/mqtt")
+async def update_ble_mqtt(config: MQTTForwardConfig, request: Request):
+    """Update BLE MQTT forward settings"""
+    user = get_session_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    gateway_config = load_gateway_config()
+    gateway_config["ble_mqtt"] = config.dict()
+    save_gateway_config(gateway_config)
+    
+    return {"status": "success", "config": config.dict()}
 
 
 def scan_ble_devices():
@@ -752,23 +834,177 @@ async def scan_ble(request: Request):
         raise HTTPException(status_code=500, detail=f"BLE tarama başarısız: {str(e)}")
 
 
-@app.post("/api/config/lorawan")
-async def update_lorawan(config: LoRaWANConfig, request: Request):
-    """Update LoRaWAN configuration"""
+BLE_LAST_SEEN_PATH = "/tmp/ble_last_seen.json"
+BLE_ACTIVE_TIMEOUT = 120  # 2 dakika
+
+
+@app.post("/api/ble/status")
+async def ble_device_status(request: Request):
+    """Check BLE device activity from last_seen timestamps (2 min threshold)"""
     user = get_session_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    
+
+    body = await request.json()
+    mac_list = body.get("macs", [])
+    statuses = {}
+
+    last_seen = {}
+    try:
+        if os.path.exists(BLE_LAST_SEEN_PATH):
+            with open(BLE_LAST_SEEN_PATH, "r") as f:
+                last_seen = json.load(f)
+    except Exception:
+        pass
+
+    now = time.time()
+    for mac in mac_list:
+        mac_upper = mac.upper()
+        ts = last_seen.get(mac_upper, 0)
+        statuses[mac_upper] = (now - ts) < BLE_ACTIVE_TIMEOUT
+
+    return {"status": "success", "statuses": statuses}
+
+
+REGION_CHANNELS = {
+    "EU868": {
+        "multi_sf": [868100000, 868300000, 868500000, 867100000, 867300000, 867500000, 867700000, 867900000],
+        "lora_std": {"frequency": 868300000, "bandwidth": 250000, "spreading_factor": 7},
+        "fsk": {"frequency": 868800000, "bandwidth": 125000, "datarate": 50000}
+    },
+    "US915": {
+        "multi_sf": [902300000, 902500000, 902700000, 902900000, 903100000, 903300000, 903500000, 903700000],
+        "lora_std": {"frequency": 903000000, "bandwidth": 500000, "spreading_factor": 8},
+        "fsk": {"frequency": 0, "bandwidth": 0, "datarate": 0}
+    },
+    "AS923": {
+        "multi_sf": [923200000, 923400000, 922200000, 922400000, 922600000, 922800000, 923000000, 923600000],
+        "lora_std": {"frequency": 923200000, "bandwidth": 250000, "spreading_factor": 7},
+        "fsk": {"frequency": 0, "bandwidth": 0, "datarate": 0}
+    }
+}
+
+CONCENTRATORD_TOML = "/etc/chirpstack-concentratord/sx1302.toml"
+MQTT_FORWARDER_TOML = "/etc/chirpstack-mqtt-forwarder/chirpstack-mqtt-forwarder.toml"
+
+
+def write_concentratord_toml(cfg: LoRaWANConfig):
+    region = cfg.region if cfg.region in REGION_CHANNELS else "EU868"
+    ch = REGION_CHANNELS[region]
+
+    channels_str = ",\n  ".join(str(f) for f in ch["multi_sf"])
+
+    content = f'''[concentratord]
+log_level="{cfg.log_level}"
+log_to_syslog=false
+stats_interval="30s"
+disable_crc_filter=false
+
+[concentratord.api]
+event_bind="ipc:///tmp/concentratord_event"
+command_bind="ipc:///tmp/concentratord_command"
+
+[gateway]
+antenna_gain={cfg.antenna_gain}
+lorawan_public=true
+region="{region}"
+model="{cfg.model}"
+gps_tty_path="/dev/ttyS0"
+model_flags=[]
+gateway_id="{cfg.gateway_id}"
+time_fallback_enabled=true
+
+[gateway.concentrator]
+multi_sf_channels=[
+  {channels_str},
+]
+
+[gateway.concentrator.lora_std]
+frequency={ch["lora_std"]["frequency"]}
+bandwidth={ch["lora_std"]["bandwidth"]}
+spreading_factor={ch["lora_std"]["spreading_factor"]}
+
+[gateway.concentrator.fsk]
+frequency={ch["fsk"]["frequency"]}
+bandwidth={ch["fsk"]["bandwidth"]}
+datarate={ch["fsk"]["datarate"]}
+
+[gateway.location]
+latitude={cfg.latitude}
+longitude={cfg.longitude}
+altitude={cfg.altitude}
+'''
+    proc = subprocess.run(["sudo", "tee", CONCENTRATORD_TOML], input=content.encode(), capture_output=True, timeout=10)
+    if proc.returncode != 0:
+        raise Exception(f"concentratord toml yazılamadı: {proc.stderr.decode()}")
+
+
+def write_mqtt_forwarder_toml(cfg: LoRaWANConfig):
+    server_addr = cfg.mqtt_server.strip()
+    if server_addr and not server_addr.startswith("tcp://"):
+        server_addr = f"tcp://{server_addr}:{cfg.mqtt_port}"
+    elif not server_addr:
+        server_addr = f"tcp://127.0.0.1:{cfg.mqtt_port}"
+
+    json_val = "true" if cfg.mqtt_json else "false"
+
+    content = f'''[logging]
+  level="info"
+
+[backend]
+  enabled="concentratord"
+
+  [backend.concentratord]
+    event_url="ipc:///tmp/concentratord_event"
+    command_url="ipc:///tmp/concentratord_command"
+
+[mqtt]
+  server="{server_addr}"
+  topic_prefix="{cfg.topic_prefix}"
+  json={json_val}
+'''
+    proc = subprocess.run(["sudo", "tee", MQTT_FORWARDER_TOML], input=content.encode(), capture_output=True, timeout=10)
+    if proc.returncode != 0:
+        raise Exception(f"mqtt forwarder toml yazılamadı: {proc.stderr.decode()}")
+
+
+def restart_lorawan_services():
+    errors = []
+    for svc in ["chirpstack-concentratord", "chirpstack-mqtt-forwarder"]:
+        try:
+            subprocess.run(["sudo", "systemctl", "restart", svc], capture_output=True, timeout=15)
+        except Exception as e:
+            errors.append(f"{svc}: {str(e)}")
+    return errors
+
+
+@app.post("/api/config/lorawan")
+async def update_lorawan(config: LoRaWANConfig, request: Request):
+    """Update LoRaWAN configuration and write TOML files"""
+    user = get_session_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
     gateway_config = load_gateway_config()
     gateway_config["lorawan"] = config.dict()
     save_gateway_config(gateway_config)
-    
+
+    if config.enabled:
+        try:
+            write_concentratord_toml(config)
+            write_mqtt_forwarder_toml(config)
+            errors = restart_lorawan_services()
+            if errors:
+                return {"status": "success", "config": config.dict(), "warnings": errors}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"TOML yazma/servis hatası: {str(e)}")
+
     return {"status": "success", "config": config.dict()}
 
 
 @app.post("/api/config/wifi")
 async def update_wifi(config: WiFiConfig, request: Request):
-    """Update WiFi configuration"""
+    """Update WiFi configuration and apply connection"""
     user = get_session_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -782,10 +1018,108 @@ async def update_wifi(config: WiFiConfig, request: Request):
     gateway_config["wifi"]["password"] = config.password
     save_gateway_config(gateway_config)
     
-    # In production, this would configure the WiFi connection
-    # using system commands like nmcli or wpa_supplicant
+    connect_result = {"applied": False, "message": ""}
     
-    return {"status": "success", "config": config.dict()}
+    try:
+        subprocess.run(
+            ['sudo', 'iw', 'reg', 'set', config.country],
+            capture_output=True, text=True, timeout=5, check=False
+        )
+    except Exception:
+        pass
+
+    try:
+        del_result = subprocess.run(
+            ['sudo', 'nmcli', 'connection', 'delete', config.ssid],
+            capture_output=True, text=True, timeout=10, check=False
+        )
+    except Exception:
+        pass
+
+    try:
+        cmd = ['sudo', 'nmcli', 'dev', 'wifi', 'connect', config.ssid]
+        if config.password:
+            cmd += ['password', config.password]
+        
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=30, check=False
+        )
+        
+        if result.returncode == 0:
+            connect_result = {"applied": True, "message": "WiFi bağlantısı başarılı"}
+            stop_ap_mode()
+        else:
+            err = result.stderr.strip() or result.stdout.strip()
+            connect_result = {"applied": False, "message": f"Bağlantı hatası: {err}"}
+    except subprocess.TimeoutExpired:
+        connect_result = {"applied": False, "message": "Bağlantı zaman aşımına uğradı"}
+    except FileNotFoundError:
+        connect_result = {"applied": False, "message": "nmcli bulunamadı"}
+    except Exception as e:
+        connect_result = {"applied": False, "message": str(e)}
+    
+    return {"status": "success", "config": config.dict(), "connection": connect_result}
+
+
+@app.get("/api/wifi/status")
+async def get_wifi_status(request: Request):
+    """Get current WiFi connection status"""
+    user = get_session_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    status = {"connected": False, "ssid": "", "ip": "", "signal": "", "mode": "client"}
+    
+    try:
+        result = subprocess.run(
+            ['nmcli', '-t', '-f', 'ACTIVE,SSID,SIGNAL', 'dev', 'wifi'],
+            capture_output=True, text=True, timeout=10, check=False
+        )
+        if result.returncode == 0:
+            for line in result.stdout.strip().split('\n'):
+                parts = line.split(':')
+                if len(parts) >= 2 and parts[0] == 'yes':
+                    status["connected"] = True
+                    status["ssid"] = parts[1]
+                    status["signal"] = parts[2] if len(parts) > 2 else ""
+                    break
+    except Exception:
+        pass
+
+    try:
+        result = subprocess.run(
+            ['hostname', '-I'],
+            capture_output=True, text=True, timeout=5, check=False
+        )
+        if result.returncode == 0:
+            ips = result.stdout.strip().split()
+            if ips:
+                status["ip"] = ips[0]
+    except Exception:
+        pass
+    
+    ap_active = False
+    try:
+        result = subprocess.run(
+            ['systemctl', 'is-active', 'hostapd'],
+            capture_output=True, text=True, timeout=5, check=False
+        )
+        ap_active = result.stdout.strip() == 'active'
+    except Exception:
+        pass
+    
+    status["mode"] = "ap" if ap_active else "client"
+    
+    return status
+
+
+def stop_ap_mode():
+    """AP modunu durdur"""
+    try:
+        subprocess.run(['sudo', 'systemctl', 'stop', 'hostapd'], capture_output=True, timeout=10, check=False)
+        subprocess.run(['sudo', 'systemctl', 'stop', 'dnsmasq'], capture_output=True, timeout=10, check=False)
+    except Exception as e:
+        print(f"AP mode durdurma hatası: {e}")
 
 
 @app.post("/api/config/system")
@@ -821,6 +1155,70 @@ async def change_password(request_data: ChangePasswordRequest, request: Request)
     save_users(users)
     
     return {"status": "success", "message": "Password changed successfully"}
+
+
+@app.get("/api/system/status")
+async def get_system_status(request: Request):
+    """Get system status (CPU, RAM, uptime, disk, temperature)"""
+    user = get_session_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    status = {}
+    
+    try:
+        result = subprocess.run(['uptime', '-p'], capture_output=True, text=True, timeout=5, check=False)
+        status["uptime"] = result.stdout.strip() if result.returncode == 0 else "N/A"
+    except Exception:
+        status["uptime"] = "N/A"
+
+    try:
+        with open('/proc/loadavg', 'r') as f:
+            parts = f.read().split()
+            status["cpu_load"] = f"{parts[0]} / {parts[1]} / {parts[2]}"
+    except Exception:
+        status["cpu_load"] = "N/A"
+
+    try:
+        result = subprocess.run(['free', '-m'], capture_output=True, text=True, timeout=5, check=False)
+        if result.returncode == 0:
+            lines = result.stdout.strip().split('\n')
+            if len(lines) >= 2:
+                parts = lines[1].split()
+                total = int(parts[1])
+                used = int(parts[2])
+                status["ram"] = f"{used}MB / {total}MB ({int(used/total*100)}%)"
+        else:
+            status["ram"] = "N/A"
+    except Exception:
+        status["ram"] = "N/A"
+
+    try:
+        result = subprocess.run(['df', '-h', '/'], capture_output=True, text=True, timeout=5, check=False)
+        if result.returncode == 0:
+            lines = result.stdout.strip().split('\n')
+            if len(lines) >= 2:
+                parts = lines[1].split()
+                status["disk"] = f"{parts[2]} / {parts[1]} ({parts[4]})"
+        else:
+            status["disk"] = "N/A"
+    except Exception:
+        status["disk"] = "N/A"
+
+    try:
+        with open('/sys/class/thermal/thermal_zone0/temp', 'r') as f:
+            temp = int(f.read().strip()) / 1000
+            status["temperature"] = f"{temp:.1f}°C"
+    except Exception:
+        status["temperature"] = "N/A"
+
+    try:
+        result = subprocess.run(['hostname', '-I'], capture_output=True, text=True, timeout=5, check=False)
+        status["ip"] = result.stdout.strip().split()[0] if result.returncode == 0 else "N/A"
+    except Exception:
+        status["ip"] = "N/A"
+
+    return status
 
 
 @app.post("/api/wifi/scan")
@@ -862,16 +1260,45 @@ async def scan_wifi(request: Request):
 
 @app.post("/api/system/restart")
 async def restart_gateway(request: Request):
-    """Restart gateway (placeholder)"""
+    """Restart gateway"""
+    user = get_session_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    subprocess.Popen(['sudo', 'reboot'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return {"status": "success", "message": "Gateway yeniden başlatılıyor"}
+
+
+@app.post("/api/system/factory-reset")
+async def factory_reset(request: Request):
+    """Reset to factory defaults"""
     user = get_session_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
-    # In production, this would trigger actual restart
-    # os.system("sudo reboot")
-    # or use subprocess: subprocess.run(["sudo", "reboot"])
+    import shutil
     
-    return {"status": "success", "message": "Gateway restart initiated"}
+    if FACTORY_DEFAULT_FILE.exists():
+        shutil.copy2(FACTORY_DEFAULT_FILE, GATEWAY_CONFIG_FILE)
+    else:
+        gateway_config = load_gateway_config()
+        default_config = {
+            "gateway_name": "Gateway-01",
+            "rs485": {"enabled": False, "baudrate": 9600, "parity": "none", "data_bits": 8, "stop_bits": 1, "flow_control": "none", "timeout": 1000, "direction_control": "auto"},
+            "modbus": {"enabled": False, "slave_id": 1, "polling_interval": 1000, "function_codes": "3,4", "register_map": "{}", "data_type": "uint16", "byte_order": "big_endian", "retry_count": 3, "error_handling": "retry"},
+            "modbus_profiles": [],
+            "modbus_mqtt": {"host": "", "port": 1883, "token": ""},
+            "ble": {"enabled": False, "profiles": []},
+            "ble_mqtt": {"host": "", "port": 1883, "token": ""},
+            "lorawan": {"enabled": False, "gateway_id": "", "region": "EU868", "model": "seeed_wm1302", "antenna_gain": 0, "log_level": "INFO", "latitude": 0, "longitude": 0, "altitude": 0, "mqtt_server": "", "mqtt_port": 1883, "topic_prefix": "eu868", "mqtt_json": False},
+            "wifi": {"country": "TR", "ssid": "", "password": "", "networks": []}
+        }
+        save_gateway_config(default_config)
+    
+    default_users = {"admin": {"password": "admin", "role": "admin"}}
+    save_users(default_users)
+    
+    return {"status": "success", "message": "Fabrika ayarlarına dönüldü"}
 
 
 @app.get("/api/health")

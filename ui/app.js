@@ -242,6 +242,13 @@ async function loadConfig() {
             if (config.modbus.error_handling) document.getElementById('modbus-error-handling').value = config.modbus.error_handling;
         }
 
+        // Modbus MQTT
+        if (config.modbus_mqtt) {
+            if (config.modbus_mqtt.host) document.getElementById('modbus-mqtt-host').value = config.modbus_mqtt.host;
+            if (config.modbus_mqtt.port) document.getElementById('modbus-mqtt-port').value = config.modbus_mqtt.port;
+            if (config.modbus_mqtt.token) document.getElementById('modbus-mqtt-token').value = config.modbus_mqtt.token;
+        }
+
         // Modbus profilleri
         if (config.modbus_profiles) {
             modbusProfiles = config.modbus_profiles;
@@ -259,19 +266,26 @@ async function loadConfig() {
             }
         }
 
+        // BLE MQTT
+        if (config.ble_mqtt) {
+            if (config.ble_mqtt.host) document.getElementById('ble-mqtt-host').value = config.ble_mqtt.host;
+            if (config.ble_mqtt.port) document.getElementById('ble-mqtt-port').value = config.ble_mqtt.port;
+            if (config.ble_mqtt.token) document.getElementById('ble-mqtt-token').value = config.ble_mqtt.token;
+        }
+
         // LoRaWAN
         if (config.lorawan) {
             document.getElementById('lorawan-enabled').checked = config.lorawan.enabled || false;
             toggleLoRaWANSettingsVisibility(config.lorawan.enabled || false);
             if (config.lorawan.gateway_id) document.getElementById('lorawan-gateway-id').value = config.lorawan.gateway_id;
-            if (config.lorawan.forwarder_type) {
-                document.getElementById('lorawan-forwarder-type').value = config.lorawan.forwarder_type;
-                toggleForwarderSettings(config.lorawan.forwarder_type);
-            }
+            if (config.lorawan.region) document.getElementById('lorawan-region').value = config.lorawan.region;
+            if (config.lorawan.antenna_gain != null) document.getElementById('lorawan-antenna-gain').value = config.lorawan.antenna_gain;
+            if (config.lorawan.log_level) document.getElementById('lorawan-log-level').value = config.lorawan.log_level;
+            if (config.lorawan.latitude != null) document.getElementById('lorawan-latitude').value = config.lorawan.latitude;
+            if (config.lorawan.longitude != null) document.getElementById('lorawan-longitude').value = config.lorawan.longitude;
+            if (config.lorawan.altitude != null) document.getElementById('lorawan-altitude').value = config.lorawan.altitude;
             if (config.lorawan.mqtt_server) document.getElementById('lorawan-mqtt-server').value = config.lorawan.mqtt_server;
             if (config.lorawan.mqtt_port) document.getElementById('lorawan-mqtt-port').value = config.lorawan.mqtt_port;
-            if (config.lorawan.udp_server) document.getElementById('lorawan-udp-server').value = config.lorawan.udp_server;
-            if (config.lorawan.udp_port) document.getElementById('lorawan-udp-port').value = config.lorawan.udp_port;
         }
 
         // WiFi
@@ -292,63 +306,102 @@ async function loadConfig() {
 }
 
 function toggleModbusSettings(enabled) {
-    const modbusSettings = document.getElementById('modbus-settings');
     const modbusBody = document.getElementById('rs485-settings');
-    
     if (modbusBody) {
         modbusBody.style.display = enabled ? 'block' : 'none';
-    }
-    
-    if (modbusSettings) {
-        modbusSettings.style.display = enabled ? 'block' : 'none';
     }
 }
 
 function setupRS485() {
-    const saveBtn = document.getElementById('save-rs485');
     const modbusEnabled = document.getElementById('modbus-enabled');
+    const addProfileBtn = document.getElementById('add-modbus-profile');
+    const saveProfileBtn = document.getElementById('save-modbus-profile');
+    const cancelProfileBtn = document.getElementById('cancel-modbus-profile');
+    const deleteProfileBtn = document.getElementById('delete-modbus-profile');
     
-    if (!saveBtn || !modbusEnabled) {
+    if (!modbusEnabled || !addProfileBtn) {
         return;
     }
     
-    // İlk yüklemede mevcut duruma göre göster/gizle
     toggleModbusSettings(modbusEnabled.checked);
     
-    // Aç/Kapat sadece görünürlüğü kontrol etsin, otomatik kaydetmesin
     modbusEnabled.addEventListener('change', (e) => {
         toggleModbusSettings(e.target.checked);
     });
     
-    // Kaydet butonu (ayar değişiklikleri için)
-    saveBtn.addEventListener('click', async () => {
+    addProfileBtn.addEventListener('click', () => {
+        clearModbusProfileForm();
+        document.getElementById('modbus-profile-form').style.display = 'block';
+    });
+    
+    saveProfileBtn.addEventListener('click', async () => {
         try {
-            const profile = {
-                enabled: document.getElementById('modbus-enabled').checked,
-                slave_id: parseInt(document.getElementById('modbus-slave-id').value),
-                polling_interval: parseInt(document.getElementById('modbus-polling-interval').value),
-                function_codes: document.getElementById('modbus-function-codes').value,
-                register_map: document.getElementById('modbus-register-map').value,
-                data_type: document.getElementById('modbus-data-type').value,
-                byte_order: document.getElementById('modbus-byte-order').value,
-                retry_count: parseInt(document.getElementById('modbus-retry-count').value),
-                error_handling: document.getElementById('modbus-error-handling').value
-            };
+            const name = document.getElementById('modbus-profile-name').value;
+            if (!name) {
+                showMessage('rs485-message', 'Lütfen profil adı girin', true);
+                return;
+            }
+            
+            const profile = collectModbusFormProfile();
+            const editIndex = document.getElementById('modbus-profile-id').value;
+            
+            if (editIndex !== '') {
+                modbusProfiles[parseInt(editIndex)] = profile;
+            } else {
+                modbusProfiles.push(profile);
+            }
 
-            modbusProfiles.push(profile);
-
-            await saveModbusConfig();
             await saveModbusProfiles();
             renderModbusProfilesList();
+            clearModbusProfileForm();
+            showMessage('rs485-message', 'Profil kaydedildi');
         } catch (error) {
             showMessage('rs485-message', 'Kaydetme başarısız: ' + error.message, true);
         }
     });
+    
+    cancelProfileBtn.addEventListener('click', () => {
+        clearModbusProfileForm();
+    });
+    
+    deleteProfileBtn.addEventListener('click', async () => {
+        const editIndex = document.getElementById('modbus-profile-id').value;
+        if (editIndex !== '') {
+            await deleteModbusProfile(parseInt(editIndex));
+        }
+    });
+
+    // Modbus MQTT kaydet
+    const saveMqttBtn = document.getElementById('save-modbus-mqtt');
+    if (saveMqttBtn) {
+        saveMqttBtn.addEventListener('click', async () => {
+            try {
+                const mqttConfig = {
+                    host: document.getElementById('modbus-mqtt-host').value,
+                    port: parseInt(document.getElementById('modbus-mqtt-port').value),
+                    token: document.getElementById('modbus-mqtt-token').value
+                };
+                await apiCall('/config/modbus/mqtt', 'POST', mqttConfig);
+                showMessage('modbus-mqtt-message', 'MQTT ayarları kaydedildi');
+            } catch (error) {
+                showMessage('modbus-mqtt-message', 'Kaydetme başarısız: ' + error.message, true);
+            }
+        });
+    }
 }
 
-async function saveModbusConfig() {
-    const config = {
-        enabled: document.getElementById('modbus-enabled').checked,
+// Modbus profilleri (backend: config.modbus_profiles)
+let modbusProfiles = [];
+
+function collectModbusFormProfile() {
+    return {
+        name: document.getElementById('modbus-profile-name').value,
+        serial_port: document.getElementById('modbus-serial-port').value,
+        baudrate: parseInt(document.getElementById('modbus-baudrate').value),
+        parity: document.getElementById('modbus-parity').value,
+        data_bits: parseInt(document.getElementById('modbus-data-bits').value),
+        stop_bits: parseInt(document.getElementById('modbus-stop-bits').value),
+        timeout: parseInt(document.getElementById('modbus-timeout').value),
         slave_id: parseInt(document.getElementById('modbus-slave-id').value),
         polling_interval: parseInt(document.getElementById('modbus-polling-interval').value),
         function_codes: document.getElementById('modbus-function-codes').value,
@@ -358,20 +411,46 @@ async function saveModbusConfig() {
         retry_count: parseInt(document.getElementById('modbus-retry-count').value),
         error_handling: document.getElementById('modbus-error-handling').value
     };
-
-    try {
-        const result = await apiCall('/config/modbus', 'POST', config);
-        if (result && result.status === 'success') {
-            console.log('Modbus config saved');
-        }
-    } catch (error) {
-        console.error('Modbus config save error:', error);
-        throw error;
-    }
 }
 
-// Modbus profilleri (backend: config.modbus_profiles)
-let modbusProfiles = [];
+function fillModbusForm(profile) {
+    document.getElementById('modbus-profile-name').value = profile.name || '';
+    document.getElementById('modbus-serial-port').value = profile.serial_port ?? '/dev/ttyUSB0';
+    document.getElementById('modbus-baudrate').value = profile.baudrate ?? 9600;
+    document.getElementById('modbus-parity').value = profile.parity ?? 'none';
+    document.getElementById('modbus-data-bits').value = profile.data_bits ?? 8;
+    document.getElementById('modbus-stop-bits').value = profile.stop_bits ?? 1;
+    document.getElementById('modbus-timeout').value = profile.timeout ?? 1000;
+    document.getElementById('modbus-slave-id').value = profile.slave_id ?? 1;
+    document.getElementById('modbus-polling-interval').value = profile.polling_interval ?? 1000;
+    document.getElementById('modbus-function-codes').value = profile.function_codes ?? '3,4';
+    document.getElementById('modbus-register-map').value = profile.register_map ?? '';
+    document.getElementById('modbus-data-type').value = profile.data_type ?? 'uint16';
+    document.getElementById('modbus-byte-order').value = profile.byte_order ?? 'big_endian';
+    document.getElementById('modbus-retry-count').value = profile.retry_count ?? 3;
+    document.getElementById('modbus-error-handling').value = profile.error_handling ?? 'retry';
+}
+
+function clearModbusProfileForm() {
+    document.getElementById('modbus-profile-id').value = '';
+    document.getElementById('modbus-profile-name').value = '';
+    document.getElementById('modbus-serial-port').value = '/dev/ttyUSB0';
+    document.getElementById('modbus-baudrate').value = 9600;
+    document.getElementById('modbus-parity').value = 'none';
+    document.getElementById('modbus-data-bits').value = 8;
+    document.getElementById('modbus-stop-bits').value = 1;
+    document.getElementById('modbus-timeout').value = 1000;
+    document.getElementById('modbus-slave-id').value = 1;
+    document.getElementById('modbus-polling-interval').value = 1000;
+    document.getElementById('modbus-function-codes').value = '3,4';
+    document.getElementById('modbus-register-map').value = '';
+    document.getElementById('modbus-data-type').value = 'uint16';
+    document.getElementById('modbus-byte-order').value = 'big_endian';
+    document.getElementById('modbus-retry-count').value = 3;
+    document.getElementById('modbus-error-handling').value = 'retry';
+    document.getElementById('modbus-profile-form').style.display = 'none';
+    document.getElementById('delete-modbus-profile').style.display = 'none';
+}
 
 function renderModbusProfilesList() {
     const listEl = document.getElementById('modbus-profiles-list');
@@ -382,33 +461,45 @@ function renderModbusProfilesList() {
         return;
     }
 
-    listEl.innerHTML = modbusProfiles.map((p, index) => `
+    listEl.innerHTML = modbusProfiles.map((p, index) => {
+        const name = (p.name || `Profil ${index + 1}`).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return `
         <div class="device-item" style="padding: 10px; margin-bottom: 5px; border: 1px solid #e1e8ed; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
             <div>
-                <strong>Profil ${index + 1}</strong><br>
+                <strong>${name}</strong><br>
+                ${p.serial_port ?? '/dev/ttyUSB0'} | ${p.baudrate ?? 9600} baud | ${p.data_bits ?? 8}${(p.parity ?? 'none')[0].toUpperCase()}${p.stop_bits ?? 1}<br>
                 Slave ID: ${p.slave_id ?? '-'} | Interval: ${p.polling_interval ?? '-'} ms
             </div>
             <div>
-                <button class="btn btn-secondary" style="padding: 5px 10px;" onclick="window.loadModbusProfile(${index})">Yükle</button>
+                <button class="btn btn-secondary" style="padding: 5px 10px; margin-right: 5px; min-width: 80px; width: auto;" onclick="window.editModbusProfile(${index})">Düzenle</button>
+                <button class="btn btn-danger" style="padding: 5px 10px; min-width: 80px; width: auto;" onclick="window.deleteModbusProfile(${index})">Sil</button>
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 }
 
-window.loadModbusProfile = function(index) {
+window.editModbusProfile = function(index) {
     const profile = modbusProfiles[index];
     if (!profile) return;
+    
+    document.getElementById('modbus-profile-id').value = index;
+    fillModbusForm(profile);
+    document.getElementById('modbus-profile-form').style.display = 'block';
+    document.getElementById('delete-modbus-profile').style.display = 'inline-block';
+};
 
-    document.getElementById('modbus-enabled').checked = !!profile.enabled;
-    document.getElementById('modbus-slave-id').value = profile.slave_id ?? 1;
-    document.getElementById('modbus-polling-interval').value = profile.polling_interval ?? 1000;
-    document.getElementById('modbus-function-codes').value = profile.function_codes ?? '3,4';
-    document.getElementById('modbus-register-map').value = profile.register_map ?? '';
-    document.getElementById('modbus-data-type').value = profile.data_type ?? 'uint16';
-    document.getElementById('modbus-byte-order').value = profile.byte_order ?? 'big_endian';
-    document.getElementById('modbus-retry-count').value = profile.retry_count ?? 3;
-    document.getElementById('modbus-error-handling').value = profile.error_handling ?? 'retry';
-    toggleModbusSettings(document.getElementById('modbus-enabled').checked);
+window.deleteModbusProfile = async function(index) {
+    if (!confirm('Bu profili silmek istediğinize emin misiniz?')) return;
+    
+    modbusProfiles.splice(index, 1);
+    renderModbusProfilesList();
+    clearModbusProfileForm();
+    try {
+        await saveModbusProfiles();
+        showMessage('rs485-message', 'Profil silindi');
+    } catch (error) {
+        showMessage('rs485-message', 'Silme başarısız: ' + error.message, true);
+    }
 };
 
 async function saveModbusProfiles() {
@@ -477,15 +568,27 @@ window.selectBLEDevice = function(mac, serviceUuid, characteristicUuid) {
     }
 };
 
-function updateBLEProfilesList() {
+async function updateBLEProfilesList() {
     const profilesList = document.getElementById('ble-profiles-list');
     if (bleProfiles.length === 0) {
         profilesList.innerHTML = '<p class="text-muted">Henüz profil yok</p>';
         return;
     }
-    
+
+    let statuses = {};
+    try {
+        const macs = bleProfiles.map(p => p.mac).filter(Boolean);
+        if (macs.length > 0) {
+            const result = await apiCall('/ble/status', 'POST', { macs });
+            if (result && result.statuses) statuses = result.statuses;
+        }
+    } catch (e) { /* ignore */ }
+
     profilesList.innerHTML = bleProfiles.map((profile, index) => {
-        const status = profile.connected ? '<span style="color: green;">● Bağlı</span>' : '<span style="color: red;">● Bağlı Değil</span>';
+        const isConnected = statuses[profile.mac?.toUpperCase()] || false;
+        const status = isConnected
+            ? '<span style="color: green;">● Bağlı</span>'
+            : '<span style="color: red;">● Bağlı Değil</span>';
         return `
             <div class="device-item" style="padding: 10px; margin-bottom: 5px; border: 1px solid #e1e8ed; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
                 <div>
@@ -493,8 +596,8 @@ function updateBLEProfilesList() {
                     ${status}
                 </div>
                 <div>
-                    <button class="btn btn-secondary" onclick="editBLEProfile(${index})" style="padding: 5px 10px; margin-right: 5px;">Düzenle</button>
-                    <button class="btn btn-danger" onclick="deleteBLEProfile(${index})" style="padding: 5px 10px;">Sil</button>
+                    <button class="btn btn-secondary" onclick="editBLEProfile(${index})" style="padding: 5px 10px; margin-right: 5px; min-width: 80px; width: auto;">Düzenle</button>
+                    <button class="btn btn-danger" onclick="deleteBLEProfile(${index})" style="padding: 5px 10px; min-width: 80px; width: auto;">Sil</button>
                 </div>
             </div>
         `;
@@ -618,7 +721,7 @@ function clearBLEProfileForm() {
     document.getElementById('delete-ble-profile').style.display = 'none';
 }
 
-async function saveBLEProfiles() {
+async function saveBLEProfiles(showMsg = true) {
     try {
         const bleEnabledEl = document.getElementById('ble-enabled');
         if (!bleEnabledEl) {
@@ -632,7 +735,9 @@ async function saveBLEProfiles() {
         });
         
         if (result && result.status === 'success') {
-            showMessage('ble-message', 'BLE profilleri kaydedildi');
+            if (showMsg) {
+                showMessage('ble-message', 'BLE profilleri kaydedildi');
+            }
             clearBLEProfileForm();
         }
     } catch (error) {
@@ -748,7 +853,6 @@ function setupBLE() {
             bleProfiles[parseInt(profileId)] = profile;
         } else {
             // Yeni ekle
-            profile.connected = false;
             bleProfiles.push(profile);
         }
         
@@ -777,8 +881,26 @@ function setupBLE() {
     // BLE enabled toggle
     bleEnabled.addEventListener('change', async (e) => {
         toggleBLESettings(e.target.checked);
-        await saveBLEProfiles();
+        await saveBLEProfiles(false);
     });
+
+    // BLE MQTT kaydet
+    const saveBLEMqttBtn = document.getElementById('save-ble-mqtt');
+    if (saveBLEMqttBtn) {
+        saveBLEMqttBtn.addEventListener('click', async () => {
+            try {
+                const mqttConfig = {
+                    host: document.getElementById('ble-mqtt-host').value,
+                    port: parseInt(document.getElementById('ble-mqtt-port').value),
+                    token: document.getElementById('ble-mqtt-token').value
+                };
+                await apiCall('/config/ble/mqtt', 'POST', mqttConfig);
+                showMessage('ble-mqtt-message', 'MQTT ayarları kaydedildi');
+            } catch (error) {
+                showMessage('ble-mqtt-message', 'Kaydetme başarısız: ' + error.message, true);
+            }
+        });
+    }
 }
 
 // ============================================================================
@@ -792,73 +914,50 @@ function toggleLoRaWANSettingsVisibility(enabled) {
     }
 }
 
-function toggleForwarderSettings(type) {
-    const mqttSettings = document.getElementById('mqtt-forwarder-settings');
-    const udpSettings = document.getElementById('udp-forwarder-settings');
-    
-    if (type === 'mqtt') {
-        mqttSettings.style.display = 'block';
-        udpSettings.style.display = 'none';
-    } else {
-        mqttSettings.style.display = 'none';
-        udpSettings.style.display = 'block';
-    }
-}
-
 function setupLoRaWAN() {
     const saveBtn = document.getElementById('save-lorawan');
-    const forwarderType = document.getElementById('lorawan-forwarder-type');
     const lorawanEnabled = document.getElementById('lorawan-enabled');
-    
-    const buildLoRaWANConfig = () => {
-        const forwarderTypeValue = forwarderType.value;
-        const config = {
-            enabled: lorawanEnabled.checked,
-            gateway_id: document.getElementById('lorawan-gateway-id').value,
-            forwarder_type: forwarderTypeValue
-        };
 
-        if (forwarderTypeValue === 'mqtt') {
-            config.mqtt_server = document.getElementById('lorawan-mqtt-server').value;
-            config.mqtt_port = parseInt(document.getElementById('lorawan-mqtt-port').value);
-        } else {
-            config.udp_server = document.getElementById('lorawan-udp-server').value;
-            config.udp_port = parseInt(document.getElementById('lorawan-udp-port').value);
-        }
+    const buildLoRaWANConfig = () => ({
+        enabled: lorawanEnabled.checked,
+        gateway_id: document.getElementById('lorawan-gateway-id').value,
+        region: document.getElementById('lorawan-region').value,
+        model: "seeed_wm1302",
+        antenna_gain: parseInt(document.getElementById('lorawan-antenna-gain').value) || 0,
+        log_level: document.getElementById('lorawan-log-level').value,
+        latitude: parseFloat(document.getElementById('lorawan-latitude').value) || 0,
+        longitude: parseFloat(document.getElementById('lorawan-longitude').value) || 0,
+        altitude: parseInt(document.getElementById('lorawan-altitude').value) || 0,
+        mqtt_server: document.getElementById('lorawan-mqtt-server').value,
+        mqtt_port: parseInt(document.getElementById('lorawan-mqtt-port').value) || 1883,
+        topic_prefix: "eu868",
+        mqtt_json: false
+    });
 
-        return config;
-    };
-
-    const saveLoRaWANConfig = async () => {
+    const saveLoRaWANConfig = async (showMsg = true) => {
         const config = buildLoRaWANConfig();
         const result = await apiCall('/config/lorawan', 'POST', config);
         return result;
     };
-    
+
     if (lorawanEnabled) {
-        // İlk yüklemede mevcut duruma göre göster/gizle
         toggleLoRaWANSettingsVisibility(lorawanEnabled.checked);
         lorawanEnabled.addEventListener('change', async (e) => {
             toggleLoRaWANSettingsVisibility(e.target.checked);
             try {
-                await saveLoRaWANConfig();
-                showMessage('lorawan-message', 'LoRaWAN durumu kaydedildi');
+                await saveLoRaWANConfig(false);
             } catch (error) {
                 showMessage('lorawan-message', 'Kaydetme başarısız: ' + error.message, true);
             }
         });
     }
-    
-    forwarderType.addEventListener('change', (e) => {
-        toggleForwarderSettings(e.target.value);
-    });
-    
+
     saveBtn.addEventListener('click', async () => {
         try {
-            const result = await saveLoRaWANConfig();
-            
+            showMessage('lorawan-message', 'Kaydediliyor ve servisler yeniden başlatılıyor...');
+            const result = await saveLoRaWANConfig(true);
             if (result && result.status === 'success') {
-                showMessage('lorawan-message', 'LoRaWAN ayarları kaydedildi');
+                showMessage('lorawan-message', 'LoRaWAN ayarları kaydedildi, servisler yeniden başlatıldı');
             }
         } catch (error) {
             showMessage('lorawan-message', 'Kaydetme başarısız: ' + error.message, true);
@@ -960,13 +1059,25 @@ function setupWiFi() {
         }
 
         try {
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Bağlanılıyor...';
             const result = await apiCall('/config/wifi', 'POST', config);
             
             if (result && result.status === 'success') {
-                showMessage('wifi-message', 'WiFi ayarları kaydedildi');
+                if (result.connection && result.connection.applied) {
+                    showMessage('wifi-message', result.connection.message);
+                } else if (result.connection) {
+                    showMessage('wifi-message', result.connection.message, true);
+                } else {
+                    showMessage('wifi-message', 'WiFi ayarları kaydedildi');
+                }
+                loadWiFiStatus();
             }
         } catch (error) {
             showMessage('wifi-message', 'Kaydetme başarısız: ' + error.message, true);
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'WiFi Bağlantısını Kaydet';
         }
     });
 }
@@ -975,10 +1086,30 @@ function setupWiFi() {
 // System Configuration
 // ============================================================================
 
+async function loadSystemStatus() {
+    try {
+        const status = await apiCall('/system/status', 'GET');
+        if (!status) return;
+        
+        const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '-'; };
+        set('sys-ip', status.ip);
+        set('sys-uptime', status.uptime);
+        set('sys-cpu', status.cpu_load);
+        set('sys-ram', status.ram);
+        set('sys-disk', status.disk);
+        set('sys-temp', status.temperature);
+    } catch (error) {
+        console.error('System status error:', error);
+    }
+}
+
 function setupSystem() {
     const saveBtn = document.getElementById('save-system');
     const restartBtn = document.getElementById('restart-gateway');
     const changePasswordBtn = document.getElementById('change-password');
+    
+    loadSystemStatus();
+    setInterval(loadSystemStatus, 30000);
     
     saveBtn.addEventListener('click', async () => {
         const config = {
@@ -1043,6 +1174,28 @@ function setupSystem() {
             alert('Yeniden başlatma başarısız: ' + error.message);
         }
     });
+
+    const factoryResetBtn = document.getElementById('factory-reset');
+    if (factoryResetBtn) {
+        factoryResetBtn.addEventListener('click', async () => {
+            if (!confirm('TÜM AYARLAR SİLİNECEK!\nŞifre admin/admin olacak.\n\nEmin misiniz?')) {
+                return;
+            }
+            if (!confirm('Bu işlem geri alınamaz. Devam etmek istiyor musunuz?')) {
+                return;
+            }
+
+            try {
+                const result = await apiCall('/system/factory-reset', 'POST');
+                if (result && result.status === 'success') {
+                    alert('Fabrika ayarlarına dönüldü. Sayfa yenilenecek.');
+                    window.location.reload();
+                }
+            } catch (error) {
+                alert('Fabrika ayarlarına dönme başarısız: ' + error.message);
+            }
+        });
+    }
 }
 
 // ============================================================================
@@ -1076,9 +1229,24 @@ document.addEventListener('DOMContentLoaded', () => {
     setupSystem();
     console.log('✓ setupSystem tamamlandı');
 
-    // Start with login screen
-    showScreen('login-screen');
-    console.log('✓ Login screen gösterildi');
-    
+    // Check existing session before showing login
+    (async () => {
+        try {
+            const config = await apiCall('/config');
+            if (config) {
+                console.log('✓ Mevcut session geçerli, admin ekranına yönlendiriliyor');
+                showScreen('admin-screen');
+                const systemNav = document.querySelector('[data-section="system"]');
+                if (systemNav) systemNav.click();
+                await loadConfig();
+                return;
+            }
+        } catch (e) {
+            console.log('Session geçersiz veya hata:', e);
+        }
+        showScreen('login-screen');
+        console.log('✓ Login screen gösterildi');
+    })();
+
     console.log('Tüm setup fonksiyonları tamamlandı!');
 });
