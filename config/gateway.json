@@ -21,20 +21,13 @@
   "wifi": {
     "networks": [
       {
-        "ssid": "TestWiFi",
-        "signal": 85,
-        "encrypted": true
-      },
-      {
-        "ssid": "OpenNetwork",
-        "signal": 60,
-        "encrypted": false
-      },
-      {
-        "ssid": "HomeWiFi",
-        "signal": 90,
+        "ssid": "FiberHGW_ZTR9CY",
+        "signal": 67,
         "encrypted": true
       }
-    ]
+    ],
+    "country": "TR",
+    "ssid": "FiberHGW_ZTR9CY",
+    "password": ""
   }
 }
