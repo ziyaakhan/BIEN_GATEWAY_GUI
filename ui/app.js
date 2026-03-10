@@ -309,15 +309,9 @@ function setupRS485() {
     // İlk yüklemede mevcut duruma göre göster/gizle
     toggleModbusSettings(modbusEnabled.checked);
     
-    // Aç/Kapat değişince hemen kaydet
-    modbusEnabled.addEventListener('change', async (e) => {
+    // Aç/Kapat sadece görünürlüğü kontrol etsin, otomatik kaydetmesin
+    modbusEnabled.addEventListener('change', (e) => {
         toggleModbusSettings(e.target.checked);
-        try {
-            await saveModbusConfig();
-            showMessage('rs485-message', 'Modbus durumu kaydedildi');
-        } catch (error) {
-            showMessage('rs485-message', 'Kaydetme başarısız: ' + error.message, true);
-        }
     });
     
     // Kaydet butonu (ayar değişiklikleri için)
