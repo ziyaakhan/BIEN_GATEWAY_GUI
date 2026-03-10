@@ -41,7 +41,7 @@
                         Sistem
                     </a>
                     <a href="#" class="nav-item" data-section="rs485">
-                        RS-485 Ayarları
+                        Modbus Ayarları
                     </a>
                     <a href="#" class="nav-item" data-section="ble">
                         BLE Ayarları
@@ -119,78 +119,13 @@
                         </div>
                     </div>
 
-                    <!-- RS-485 Section -->
+                    <!-- Modbus Section -->
                     <div id="section-rs485" class="section">
                         <div class="card">
                             <div class="card-header">
-                                <h3>RS-485 Konfigürasyonu</h3>
-                                <div class="toggle-switch">
-                                    <input type="checkbox" id="rs485-enabled" class="toggle-input">
-                                    <label for="rs485-enabled" class="toggle-label"></label>
-                                </div>
+                                <h3>Modbus Ayarları</h3>
                             </div>
                             <div class="card-body" id="rs485-settings">
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="rs485-baudrate">Baud Rate</label>
-                                        <select id="rs485-baudrate" class="form-control">
-                                            <option value="9600">9600</option>
-                                            <option value="19200">19200</option>
-                                            <option value="38400">38400</option>
-                                            <option value="57600">57600</option>
-                                            <option value="115200">115200</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="rs485-data-bits">Data Bits</label>
-                                        <select id="rs485-data-bits" class="form-control">
-                                            <option value="5">5</option>
-                                            <option value="6">6</option>
-                                            <option value="7">7</option>
-                                            <option value="8" selected>8</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="rs485-stop-bits">Stop Bits</label>
-                                        <select id="rs485-stop-bits" class="form-control">
-                                            <option value="1" selected>1</option>
-                                            <option value="1.5">1.5</option>
-                                            <option value="2">2</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="rs485-parity">Parity</label>
-                                        <select id="rs485-parity" class="form-control">
-                                            <option value="none">None</option>
-                                            <option value="even">Even</option>
-                                            <option value="odd">Odd</option>
-                                            <option value="mark">Mark</option>
-                                            <option value="space">Space</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="rs485-flow-control">Flow Control</label>
-                                        <select id="rs485-flow-control" class="form-control">
-                                            <option value="none" selected>None</option>
-                                            <option value="rts_cts">RTS/CTS</option>
-                                            <option value="xon_xoff">XON/XOFF</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="rs485-timeout">Timeout (ms)</label>
-                                        <input type="number" id="rs485-timeout" class="form-control" min="0" max="10000" value="1000">
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label for="rs485-direction-control">Direction Control</label>
-                                    <select id="rs485-direction-control" class="form-control">
-                                        <option value="auto" selected>Auto</option>
-                                        <option value="manual">Manual</option>
-                                    </select>
-                                </div>
-                                <hr>
                                 <h4 style="margin-bottom: 15px;">Modbus Ayarları</h4>
                                 <div class="form-group">
                                     <label style="display: block; margin-bottom: 8px;">Modbus Aktif</label>

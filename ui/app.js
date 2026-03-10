@@ -228,19 +228,6 @@ async function loadConfig() {
         
         if (!config) return;
 
-        // RS-485
-        if (config.rs485) {
-            document.getElementById('rs485-enabled').checked = config.rs485.enabled || false;
-            if (config.rs485.baudrate) document.getElementById('rs485-baudrate').value = config.rs485.baudrate;
-            if (config.rs485.parity) document.getElementById('rs485-parity').value = config.rs485.parity;
-            if (config.rs485.data_bits) document.getElementById('rs485-data-bits').value = config.rs485.data_bits;
-            if (config.rs485.stop_bits) document.getElementById('rs485-stop-bits').value = config.rs485.stop_bits;
-            if (config.rs485.flow_control) document.getElementById('rs485-flow-control').value = config.rs485.flow_control;
-            if (config.rs485.timeout) document.getElementById('rs485-timeout').value = config.rs485.timeout;
-            if (config.rs485.direction_control) document.getElementById('rs485-direction-control').value = config.rs485.direction_control;
-            toggleRS485Settings(config.rs485.enabled || false);
-        }
-
         // Modbus
         if (config.modbus) {
             document.getElementById('modbus-enabled').checked = config.modbus.enabled || false;
