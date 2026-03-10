@@ -318,7 +318,7 @@ function setupRS485() {
     saveBtn.addEventListener('click', async () => {
         try {
             await saveModbusConfig();
-            showMessage('rs485-message', 'Modbus ayarları kaydedildi');
+            // İstenmediği için başarı mesajı gösterme
         } catch (error) {
             showMessage('rs485-message', 'Kaydetme başarısız: ' + error.message, true);
         }
