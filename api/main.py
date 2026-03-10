@@ -12,9 +12,18 @@ from typing import Optional, List
 import json
 import os
 import subprocess
+import time
+import logging
 from pathlib import Path
 from datetime import datetime, timedelta
 import secrets
+
+# Logging yapılandırması
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Paths
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -22,6 +31,12 @@ UI_DIR = BASE_DIR / "ui"
 CONFIG_DIR = BASE_DIR / "config"
 USERS_FILE = CONFIG_DIR / "users.json"
 GATEWAY_CONFIG_FILE = CONFIG_DIR / "gateway.json"
+
+# ThingsBoard Gateway paths (Raspberry Pi'de /etc/thingsboard-gateway/config/ olacak)
+# Environment variable ile override edilebilir
+TB_GATEWAY_CONFIG_DIR = Path(os.getenv("TB_GATEWAY_CONFIG_DIR", "/etc/thingsboard-gateway/config"))
+TB_GATEWAY_CONFIG_FILE = TB_GATEWAY_CONFIG_DIR / "tb_gateway.json"
+TB_BLE_CONFIG_FILE = TB_GATEWAY_CONFIG_DIR / "ble.json"
 
 # Ensure config directory exists
 CONFIG_DIR.mkdir(exist_ok=True)
@@ -101,26 +116,7 @@ def load_gateway_config():
             },
             "ble": {
                 "enabled": False,
-                "server_mac": "",
-                "service_uuid": "",
-                "characteristic_uuid": "",
-                "connection_timeout": 30,
-                "scan_interval": 10,
-                "auto_reconnect": False,
-                "operation_mode": "read",
-                "read_interval": 1000,
-                "write_interval": 1000,
-                "connection_control": False,
-                "forwarder_type": "mqtt",
-                "mqtt_server": "",
-                "mqtt_port": 1883,
-                "mqtt_topic": "",
-                "mqtt_access_token": "",
-                "https_server": "",
-                "https_port": 443,
-                "https_endpoint": "",
-                "https_access_token": "",
-                "devices": []
+                "profiles": []
             },
             "lorawan": {
                 "enabled": False,
@@ -433,6 +429,11 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
+class BLEProfilesRequest(BaseModel):
+    enabled: bool
+    profiles: List[dict]
+
+
 # ============================================================================
 # ROUTES
 # ============================================================================
@@ -528,6 +529,301 @@ async def update_modbus(config: ModbusConfig, request: Request):
     return {"status": "success", "config": config.dict()}
 
 
+def scan_ble_devices():
+    """
+    Scan for BLE devices using bluetoothctl or hcitool
+    Raspberry Pi için gerçek BLE tarama implementasyonu
+    """
+    devices = []
+    
+    try:
+        # Önce bluetoothctl ile dene
+        try:
+            # bluetoothctl scan on (background'da çalışır)
+            scan_process = subprocess.Popen(
+                ['bluetoothctl', 'scan', 'on'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            # Biraz bekle (cihazların bulunması için)
+            time.sleep(8)
+            
+            # Taramayı durdur
+            subprocess.run(['bluetoothctl', 'scan', 'off'], 
+                         capture_output=True, timeout=3, check=False)
+            scan_process.terminate()
+            scan_process.wait(timeout=2)
+            
+            # Cihazları listele
+            result = subprocess.run(
+                ['bluetoothctl', 'devices'],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False
+            )
+            
+            if result.returncode == 0 and result.stdout.strip():
+                seen_macs = set()
+                for line in result.stdout.strip().split('\n'):
+                    if 'Device' in line:
+                        parts = line.split(' ', 1)
+                        if len(parts) >= 2:
+                            mac = parts[1].split()[0]
+                            name = ' '.join(parts[1].split()[1:]) if len(parts[1].split()) > 1 else mac
+                            
+                            if mac and mac not in seen_macs and ':' in mac:
+                                seen_macs.add(mac)
+                                devices.append({
+                                    'mac': mac,
+                                    'name': name,
+                                    'service_uuid': '',  # bluetoothctl ile UUID almak için ek komut gerekir
+                                    'characteristic_uuid': ''
+                                })
+            
+            if devices:
+                return devices
+                
+        except FileNotFoundError:
+            print("bluetoothctl bulunamadı")
+        except subprocess.TimeoutExpired:
+            print("bluetoothctl tarama zaman aşımına uğradı")
+        except Exception as e:
+            print(f"bluetoothctl tarama hatası: {e}")
+        
+        # Eğer bluetoothctl başarısız olduysa, hcitool ile dene
+        try:
+            result = subprocess.run(
+                ['sudo', 'hcitool', 'lescan', '--duplicates'],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False
+            )
+            
+            if result.stdout and result.stdout.strip():
+                seen_macs = set()
+                for line in result.stdout.strip().split('\n'):
+                    if line.strip() and not line.startswith('LE Scan'):
+                        parts = line.split()
+                        if len(parts) >= 1:
+                            mac = parts[0]
+                            name = ' '.join(parts[1:]) if len(parts) > 1 else mac
+                            
+                            if mac and mac not in seen_macs and ':' in mac and len(mac) == 17:
+                                seen_macs.add(mac)
+                                devices.append({
+                                    'mac': mac,
+                                    'name': name,
+                                    'service_uuid': '',
+                                    'characteristic_uuid': ''
+                                })
+            
+            if devices:
+                return devices
+                
+        except FileNotFoundError:
+            print("hcitool bulunamadı. BLE tarama için bluetoothctl veya hcitool gerekli.")
+        except subprocess.TimeoutExpired:
+            print("hcitool tarama zaman aşımına uğradı")
+        except Exception as e:
+            print(f"hcitool tarama hatası: {e}")
+        
+        # Windows'ta test için mock data (geliştirme ortamı)
+        import platform
+        if platform.system() == 'Windows':
+            print("Windows ortamında - mock BLE cihazları döndürülüyor")
+            return [
+                {
+                    'mac': 'AA:BB:CC:DD:EE:FF',
+                    'name': 'Mock BLE Device',
+                    'service_uuid': '',
+                    'characteristic_uuid': ''
+                }
+            ]
+        
+    except Exception as e:
+        print(f"BLE tarama genel hatası: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    return devices
+
+
+def update_tb_gateway_config(enabled: bool, profile_name: str = "ble"):
+    """
+    ThingsBoard Gateway config dosyasını güncelle
+    BLE aktifse connector ekle, değilse sil
+    """
+    try:
+        # Config dizinini oluştur
+        TB_GATEWAY_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        
+        # Mevcut config'i oku veya oluştur
+        if TB_GATEWAY_CONFIG_FILE.exists():
+            with open(TB_GATEWAY_CONFIG_FILE, 'r') as f:
+                tb_config = json.load(f)
+        else:
+            # Varsayılan config oluştur
+            tb_config = {
+                "thingsboard": {
+                    "host": "localhost",
+                    "port": 1883,
+                    "security": {
+                        "type": "accessToken",
+                        "accessToken": ""
+                    }
+                },
+                "storage": {
+                    "type": "memory"
+                },
+                "connectors": []
+            }
+        
+        # Connectors listesini güncelle
+        if "connectors" not in tb_config:
+            tb_config["connectors"] = []
+        
+        # BLE connector'ı bul
+        ble_connector_index = None
+        for i, connector in enumerate(tb_config["connectors"]):
+            if connector.get("type") == "ble" and connector.get("name") == profile_name:
+                ble_connector_index = i
+                break
+        
+        if enabled:
+            # BLE connector ekle (yoksa)
+            if ble_connector_index is None:
+                tb_config["connectors"].append({
+                    "type": "ble",
+                    "name": profile_name,
+                    "configuration": "ble.json"
+                })
+        else:
+            # BLE connector'ı sil
+            if ble_connector_index is not None:
+                tb_config["connectors"].pop(ble_connector_index)
+        
+        # Config dosyasını kaydet
+        with open(TB_GATEWAY_CONFIG_FILE, 'w') as f:
+            json.dump(tb_config, f, indent=2)
+        
+        # Dosya izinlerini ayarla
+        try:
+            os.chmod(TB_GATEWAY_CONFIG_FILE, 0o644)
+        except Exception:
+            pass
+        
+        return True
+        
+    except PermissionError as e:
+        print(f"ThingsBoard Gateway config dosyası yazma izni yok: {e}")
+        return False
+    except Exception as e:
+        print(f"ThingsBoard Gateway config güncelleme hatası: {e}")
+        return False
+
+
+def update_tb_ble_config(profiles: List[dict]):
+    """
+    ThingsBoard Gateway BLE config dosyasını güncelle
+    """
+    try:
+        # Config dizinini oluştur
+        TB_GATEWAY_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        
+        if not profiles:
+            # Profil yoksa boş config oluştur
+            ble_config = {
+                "name": "ble",
+                "passiveScanMode": False,
+                "devices": [],
+                "logLevel": "INFO",
+                "enableRemoteLogging": True,
+                "configVersion": "3.8.1"
+            }
+        else:
+            # Profilleri ThingsBoard Gateway formatına çevir
+            devices = []
+            for profile in profiles:
+                device = {
+                    "name": profile.get("name", "BLE_Device"),
+                    "MACAddress": profile.get("mac", ""),
+                    "pollPeriod": profile.get("poll_period", 10000),
+                    "connectRetry": profile.get("connect_retry", 3),
+                    "connectRetryInSeconds": profile.get("connect_retry_seconds", 10),
+                    "waitAfterConnectRetries": profile.get("wait_after_retries", 30),
+                    "telemetry": []
+                }
+                
+                # Telemetry ekle
+                for telemetry in profile.get("telemetry", []):
+                    if telemetry.get("key") and telemetry.get("valueExpression"):
+                        device["telemetry"].append({
+                            "key": telemetry["key"],
+                            "method": "read",
+                            "serviceUUID": profile.get("service_uuid", ""),
+                            "characteristicUUID": profile.get("characteristic_uuid", ""),
+                            "valueExpression": telemetry["valueExpression"]
+                        })
+                
+                devices.append(device)
+            
+            ble_config = {
+                "name": "ble",
+                "passiveScanMode": False,
+                "devices": devices,
+                "logLevel": "INFO",
+                "enableRemoteLogging": True,
+                "configVersion": "3.8.1"
+            }
+        
+        # Config dosyasını kaydet
+        with open(TB_BLE_CONFIG_FILE, 'w') as f:
+            json.dump(ble_config, f, indent=2)
+        
+        # Dosya izinlerini ayarla
+        try:
+            os.chmod(TB_BLE_CONFIG_FILE, 0o644)
+        except Exception:
+            pass
+        
+        return True
+        
+    except PermissionError as e:
+        print(f"BLE config dosyası yazma izni yok: {e}")
+        return False
+    except Exception as e:
+        print(f"BLE config güncelleme hatası: {e}")
+        return False
+
+
+def restart_thingsboard_gateway():
+    """
+    ThingsBoard Gateway servisini yeniden başlat
+    """
+    try:
+        result = subprocess.run(
+            ['sudo', 'systemctl', 'restart', 'thingsboard-gateway'],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False
+        )
+        
+        if result.returncode == 0:
+            return True
+        else:
+            print(f"ThingsBoard Gateway restart hatası: {result.stderr}")
+            return False
+            
+    except Exception as e:
+        print(f"ThingsBoard Gateway restart hatası: {e}")
+        return False
+
+
 @app.post("/api/config/ble")
 async def update_ble(config: BLEConfig, request: Request):
     """Update BLE configuration"""
@@ -540,6 +836,90 @@ async def update_ble(config: BLEConfig, request: Request):
     save_gateway_config(gateway_config)
     
     return {"status": "success", "config": config.dict()}
+
+
+@app.post("/api/config/ble/profiles")
+async def update_ble_profiles(request_data: BLEProfilesRequest, request: Request):
+    """Update BLE profiles and ThingsBoard Gateway config"""
+    logger.info("=" * 50)
+    logger.info("BLE PROFILES UPDATE ENDPOINT ÇAĞRILDI")
+    logger.info("=" * 50)
+    print("=" * 50)
+    print("BLE PROFILES UPDATE ENDPOINT ÇAĞRILDI")
+    print("=" * 50)
+    logger.info(f"Request data: enabled={request_data.enabled}, profiles count={len(request_data.profiles)}")
+    print(f"Request data: enabled={request_data.enabled}, profiles count={len(request_data.profiles)}")
+    
+    user = get_session_user(request)
+    logger.info(f"Session user: {user}")
+    print(f"Session user: {user}")
+    
+    if not user:
+        logger.warning("401: Kullanıcı kimlik doğrulaması yapılmamış")
+        print("401: Kullanıcı kimlik doğrulaması yapılmamış")
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Gateway config'i güncelle
+    gateway_config = load_gateway_config()
+    if "ble" not in gateway_config:
+        gateway_config["ble"] = {}
+    
+    gateway_config["ble"]["enabled"] = request_data.enabled
+    gateway_config["ble"]["profiles"] = request_data.profiles
+    logger.info(f"Gateway config güncelleniyor: enabled={request_data.enabled}")
+    print(f"Gateway config güncelleniyor: enabled={request_data.enabled}")
+    save_gateway_config(gateway_config)
+    
+    # ThingsBoard Gateway config'leri güncelle
+    if request_data.enabled and request_data.profiles:
+        # BLE aktif ve profil varsa
+        update_tb_gateway_config(True, "ble")
+        update_tb_ble_config(request_data.profiles)
+    else:
+        # BLE pasifse connector'ı kaldır
+        update_tb_gateway_config(False, "ble")
+        update_tb_ble_config([])
+    
+    # ThingsBoard Gateway servisini yeniden başlat
+    restart_thingsboard_gateway()
+    
+    return {"status": "success", "profiles": request_data.profiles}
+
+
+@app.post("/api/ble/scan")
+async def scan_ble(request: Request):
+    """Scan for BLE devices"""
+    logger.info("=" * 50)
+    logger.info("BLE SCAN ENDPOINT ÇAĞRILDI")
+    logger.info("=" * 50)
+    print("=" * 50)
+    print("BLE SCAN ENDPOINT ÇAĞRILDI")
+    print("=" * 50)
+    
+    user = get_session_user(request)
+    logger.info(f"Session user: {user}")
+    print(f"Session user: {user}")
+    
+    if not user:
+        logger.warning("401: Kullanıcı kimlik doğrulaması yapılmamış")
+        print("401: Kullanıcı kimlik doğrulaması yapılmamış")
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        logger.info("BLE cihazları taranıyor...")
+        print("BLE cihazları taranıyor...")
+        devices = scan_ble_devices()
+        logger.info(f"Bulunan cihaz sayısı: {len(devices)}")
+        logger.info(f"Cihazlar: {devices}")
+        print(f"Bulunan cihaz sayısı: {len(devices)}")
+        print(f"Cihazlar: {devices}")
+        return {"status": "success", "devices": devices}
+    except Exception as e:
+        logger.error(f"BLE tarama hatası: {e}", exc_info=True)
+        print(f"BLE tarama hatası: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"BLE tarama başarısız: {str(e)}")
 
 
 @app.post("/api/config/lorawan")
@@ -616,11 +996,29 @@ async def change_password(request_data: ChangePasswordRequest, request: Request)
 @app.post("/api/wifi/scan")
 async def scan_wifi(request: Request):
     """Scan for WiFi networks"""
+    logger.info("=" * 50)
+    logger.info("WIFI SCAN ENDPOINT ÇAĞRILDI")
+    logger.info("=" * 50)
+    print("=" * 50)
+    print("WIFI SCAN ENDPOINT ÇAĞRILDI")
+    print("=" * 50)
+    
     user = get_session_user(request)
+    logger.info(f"Session user: {user}")
+    print(f"Session user: {user}")
+    
     if not user:
+        logger.warning("401: Kullanıcı kimlik doğrulaması yapılmamış")
+        print("401: Kullanıcı kimlik doğrulaması yapılmamış")
         raise HTTPException(status_code=401, detail="Not authenticated")
     
+    logger.info("WiFi ağları taranıyor...")
+    print("WiFi ağları taranıyor...")
     networks = scan_wifi_networks()
+    logger.info(f"Bulunan ağ sayısı: {len(networks)}")
+    logger.info(f"Ağlar: {networks}")
+    print(f"Bulunan ağ sayısı: {len(networks)}")
+    print(f"Ağlar: {networks}")
     
     # Save scanned networks to config
     gateway_config = load_gateway_config()

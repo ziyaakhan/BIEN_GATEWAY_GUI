@@ -1,0 +1,188 @@
+{
+    "thingsboard": {
+      "host": "38.242.202.86",
+      "port": 1884,
+      "remoteShell": true,
+      "remoteConfiguration": true,
+      "latencyDebugMode": false,
+      "statistics": {
+        "enable": true,
+        "enableCustom": false,
+        "statsSendPeriodInSeconds": 3600,
+        "customStatsSendPeriodInSeconds": 3600
+      },
+      "deviceFiltering": {
+        "enable": false,
+        "filterFile": "list.json"
+      },
+      "maxPayloadSizeBytes": 8196,
+      "minPackSendDelayMS": 50,
+      "minPackSizeToSend": 500,
+      "checkConnectorsConfigurationInSeconds": 60,
+      "handleDeviceRenaming": true,
+      "security": {
+        "type": "accessToken",
+        "accessToken": "dz5Jk5eh65moMZpLKzu9"
+      },
+      "qos": 1,
+      "reportStrategy": {
+        "type": "ON_RECEIVED",
+        "reportPeriod": 10000,
+        "ttl": 86400
+      },
+      "checkingDeviceActivity": {
+        "checkDeviceInactivity": false,
+        "inactivityTimeoutSeconds": 300,
+        "inactivityCheckPeriodSeconds": 10
+      },
+      "rateLimits": "DEFAULT_TELEMETRY_RATE_LIMIT",
+      "dpRateLimits": "DEFAULT_TELEMETRY_DP_RATE_LIMIT",
+      "messagesRateLimits": "DEFAULT_MESSAGES_RATE_LIMIT",
+      "deviceMessagesRateLimits": "DEFAULT_MESSAGES_RATE_LIMIT",
+      "deviceRateLimits": "DEFAULT_TELEMETRY_RATE_LIMIT",
+      "deviceDpRateLimits": "DEFAULT_TELEMETRY_DP_RATE_LIMIT",
+      "ts": 1768374643683
+    },
+    "storage": {
+      "type": "memory",
+      "read_records_count": 100,
+      "max_records_count": 100000,
+      "data_folder_path": "./data/",
+      "max_file_count": 10,
+      "max_read_records_count": 10,
+      "max_records_per_file": 10000,
+      "data_file_path": "./data/data.db",
+      "messages_ttl_check_in_hours": 1,
+      "messages_ttl_in_days": 7,
+      "ts": 1768374643683
+    },
+    "grpc": {
+      "enabled": false,
+      "serverPort": 9595,
+      "keepAliveTimeMs": 10001,
+      "keepAliveTimeoutMs": 5000,
+      "keepAlivePermitWithoutCalls": true,
+      "maxPingsWithoutData": 0,
+      "minTimeBetweenPingsMs": 10000,
+      "minPingIntervalWithoutDataMs": 5000
+    },
+    "connectors": [
+      {
+        "type": "ble",
+        "name": "deneme",
+        "configuration": "deneme.json"
+      }
+    ]
+  }biensis-rpi@BIENSIS-RPI2:/etc/thingsboard-gateway/config $ cat deneme.json
+  {
+    "name": "deneme",
+    "passiveScanMode": false,
+    "devices": [
+      {
+        "name": "Biensis_BLE_Cihazi",
+        "MACAddress": "50:78:7D:92:7A:0E",
+        "pollPeriod": 10000,
+        "connectRetry": 3,
+        "connectRetryInSeconds": 10,
+        "waitAfterConnectRetries": 30,
+        "telemetry": [
+          {
+            "key": "temperature",
+            "method": "read",
+            "serviceUUID": "12345678-1234-1234-1234-1234567890ab",
+            "characteristicUUID": "abcdefab-1234-5678-1234-abcdefabcdef",
+            "valueExpression": "[0]"
+          },
+          {
+            "key": "humidity",
+            "method": "read",
+            "serviceUUID": "12345678-1234-1234-1234-1234567890ab",
+            "characteristicUUID": "abcdefab-1234-5678-1234-abcdefabcdef",
+            "valueExpression": "[1]"
+          }
+        ],
+        "attributes": []
+      }
+    ],
+    "id": "0d01fc3e-c26f-4836-abbf-5c1ae5b2a468",
+    "logLevel": "INFO",
+    "enableRemoteLogging": true,
+    "configVersion": "3.8.1"
+  }biensis-rpi@BIENSIS-RPI2:/etc/thingsboard-gateway/config $ cat tb_gateway.json
+  {
+    "thingsboard": {
+      "host": "38.242.202.86",
+      "port": 1884,
+      "remoteShell": true,
+      "remoteConfiguration": true,
+      "latencyDebugMode": false,
+      "statistics": {
+        "enable": true,
+        "enableCustom": false,
+        "statsSendPeriodInSeconds": 3600,
+        "customStatsSendPeriodInSeconds": 3600
+      },
+      "deviceFiltering": {
+        "enable": false,
+        "filterFile": "list.json"
+      },
+      "maxPayloadSizeBytes": 8196,
+      "minPackSendDelayMS": 50,
+      "minPackSizeToSend": 500,
+      "checkConnectorsConfigurationInSeconds": 60,
+      "handleDeviceRenaming": true,
+      "security": {
+        "type": "accessToken",
+        "accessToken": "dz5Jk5eh65moMZpLKzu9"
+      },
+      "qos": 1,
+      "reportStrategy": {
+        "type": "ON_RECEIVED",
+        "reportPeriod": 10000,
+        "ttl": 86400
+      },
+      "checkingDeviceActivity": {
+        "checkDeviceInactivity": false,
+        "inactivityTimeoutSeconds": 300,
+        "inactivityCheckPeriodSeconds": 10
+      },
+      "rateLimits": "DEFAULT_TELEMETRY_RATE_LIMIT",
+      "dpRateLimits": "DEFAULT_TELEMETRY_DP_RATE_LIMIT",
+      "messagesRateLimits": "DEFAULT_MESSAGES_RATE_LIMIT",
+      "deviceMessagesRateLimits": "DEFAULT_MESSAGES_RATE_LIMIT",
+      "deviceRateLimits": "DEFAULT_TELEMETRY_RATE_LIMIT",
+      "deviceDpRateLimits": "DEFAULT_TELEMETRY_DP_RATE_LIMIT",
+      "ts": 1768374643683
+    },
+    "storage": {
+      "type": "memory",
+      "read_records_count": 100,
+      "max_records_count": 100000,
+      "data_folder_path": "./data/",
+      "max_file_count": 10,
+      "max_read_records_count": 10,
+      "max_records_per_file": 10000,
+      "data_file_path": "./data/data.db",
+      "messages_ttl_check_in_hours": 1,
+      "messages_ttl_in_days": 7,
+      "ts": 1768374643683
+    },
+    "grpc": {
+      "enabled": false,
+      "serverPort": 9595,
+      "keepAliveTimeMs": 10001,
+      "keepAliveTimeoutMs": 5000,
+      "keepAlivePermitWithoutCalls": true,
+      "maxPingsWithoutData": 0,
+      "minTimeBetweenPingsMs": 10000,
+      "minPingIntervalWithoutDataMs": 5000
+    },
+    "connectors": [
+      {
+        "type": "ble",
+        "name": "deneme",
+        "configuration": "deneme.json"
+      }
+    ]
+  }
+}

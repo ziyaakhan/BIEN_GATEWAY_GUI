@@ -269,118 +269,84 @@
                                 </div>
                             </div>
                             <div class="card-body">
+                                <!-- BLE Tarama -->
                                 <div class="form-group">
-                                    <label for="ble-server-mac">Server MAC Adresi</label>
-                                    <input type="text" id="ble-server-mac" class="form-control" placeholder="AA:BB:CC:DD:EE:FF">
-                                </div>
-                                <div class="form-group">
-                                    <label for="ble-service-uuid">Servis UUID</label>
-                                    <input type="text" id="ble-service-uuid" class="form-control" placeholder="0000180f-0000-1000-8000-00805f9b34fb">
+                                    <button id="scan-ble" class="btn btn-secondary">BLE Cihazlarını Tara</button>
                                 </div>
                                 <div class="form-group">
-                                    <label for="ble-characteristic-uuid">Karakteristik UUID</label>
-                                    <input type="text" id="ble-characteristic-uuid" class="form-control" placeholder="00002a19-0000-1000-8000-00805f9b34fb">
-                                </div>
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="ble-connection-timeout">Bağlantı Zaman Aşımı (saniye)</label>
-                                        <input type="number" id="ble-connection-timeout" class="form-control" min="1" max="300" value="30">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="ble-scan-interval">BLE Tarama Süresi (saniye)</label>
-                                        <input type="number" id="ble-scan-interval" class="form-control" min="1" max="3600" value="10">
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label style="display: block; margin-bottom: 8px;">Otomatik Yeniden Bağlanma</label>
-                                    <div class="toggle-switch">
-                                        <input type="checkbox" id="ble-auto-reconnect" class="toggle-input">
-                                        <label for="ble-auto-reconnect" class="toggle-label"></label>
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label for="ble-operation-mode">Read/Write/Notify Seçimi</label>
-                                    <select id="ble-operation-mode" class="form-control">
-                                        <option value="read">Read</option>
-                                        <option value="write">Write</option>
-                                        <option value="notify">Notify</option>
-                                        <option value="read_write">Read/Write</option>
-                                        <option value="read_notify">Read/Notify</option>
-                                    </select>
-                                </div>
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="ble-read-interval">Okuma Aralığı (ms)</label>
-                                        <input type="number" id="ble-read-interval" class="form-control" min="100" max="60000" value="1000">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="ble-write-interval">Yazma Aralığı (ms)</label>
-                                        <input type="number" id="ble-write-interval" class="form-control" min="100" max="60000" value="1000">
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label style="display: block; margin-bottom: 8px;">Bağlantı Kontrolü</label>
-                                    <div class="toggle-switch">
-                                        <input type="checkbox" id="ble-connection-control" class="toggle-input">
-                                        <label for="ble-connection-control" class="toggle-label"></label>
+                                    <label>Taranan BLE Cihazları</label>
+                                    <div id="ble-scanned-devices" class="device-list" style="max-height: 200px; overflow-y: auto;">
+                                        <p class="text-muted">BLE cihazlarını taramak için yukarıdaki butona tıklayın</p>
                                     </div>
                                 </div>
                                 <hr>
-                                <h4 style="margin-bottom: 15px;">Veri İletim Ayarları</h4>
-                                <div class="form-group">
-                                    <label for="ble-forwarder-type">İletim Tipi</label>
-                                    <select id="ble-forwarder-type" class="form-control">
-                                        <option value="mqtt" selected>MQTT</option>
-                                        <option value="https">HTTPS</option>
-                                    </select>
+                                
+                                <!-- Profil Listesi -->
+                                <h4 style="margin-bottom: 15px;">BLE Profilleri</h4>
+                                <div id="ble-profiles-list" class="device-list" style="margin-bottom: 20px;">
+                                    <p class="text-muted">Henüz profil yok</p>
                                 </div>
-                                <div id="ble-mqtt-settings">
+                                <div class="form-group">
+                                    <button id="add-ble-profile" class="btn btn-secondary">Yeni Profil Ekle</button>
+                                </div>
+                                <hr>
+                                
+                                <!-- Profil Formu -->
+                                <div id="ble-profile-form" style="display: none;">
+                                    <h4 style="margin-bottom: 15px;">Profil Ayarları</h4>
+                                    <input type="hidden" id="ble-profile-id">
+                                    
                                     <div class="form-group">
-                                        <label for="ble-mqtt-server">MQTT Server</label>
-                                        <input type="text" id="ble-mqtt-server" class="form-control" placeholder="mqtt.example.com">
+                                        <label for="ble-profile-name">Cihaz İsmi</label>
+                                        <input type="text" id="ble-profile-name" class="form-control" placeholder="Örn: ESP32-C3-Gateway">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="ble-profile-mac">MAC Adresi</label>
+                                        <input type="text" id="ble-profile-mac" class="form-control" placeholder="AA:BB:CC:DD:EE:FF">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="ble-profile-service-uuid">Servis UUID</label>
+                                        <input type="text" id="ble-profile-service-uuid" class="form-control" placeholder="0000180f-0000-1000-8000-00805f9b34fb">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="ble-profile-characteristic-uuid">Karakteristik UUID</label>
+                                        <input type="text" id="ble-profile-characteristic-uuid" class="form-control" placeholder="00002a19-0000-1000-8000-00805f9b34fb">
                                     </div>
                                     <div class="form-row">
                                         <div class="form-group">
-                                            <label for="ble-mqtt-port">MQTT Port</label>
-                                            <input type="number" id="ble-mqtt-port" class="form-control" min="1" max="65535" value="1883">
+                                            <label for="ble-profile-connect-retry">Bağlantı Deneme Sayısı</label>
+                                            <input type="number" id="ble-profile-connect-retry" class="form-control" min="1" max="10" value="3">
                                         </div>
                                         <div class="form-group">
-                                            <label for="ble-mqtt-topic">MQTT Topic</label>
-                                            <input type="text" id="ble-mqtt-topic" class="form-control" placeholder="gateway/ble/data">
+                                            <label for="ble-profile-connect-retry-seconds">Bağlantı Deneme Aralığı (saniye)</label>
+                                            <input type="number" id="ble-profile-connect-retry-seconds" class="form-control" min="1" max="60" value="10">
                                         </div>
                                     </div>
                                     <div class="form-group">
-                                        <label for="ble-mqtt-access-token">Access Token</label>
-                                        <input type="text" id="ble-mqtt-access-token" class="form-control" placeholder="Access token">
-                                    </div>
-                                </div>
-                                <div id="ble-https-settings" style="display: none;">
-                                    <div class="form-group">
-                                        <label for="ble-https-server">HTTPS Server</label>
-                                        <input type="text" id="ble-https-server" class="form-control" placeholder="api.example.com">
-                                    </div>
-                                    <div class="form-row">
-                                        <div class="form-group">
-                                            <label for="ble-https-port">HTTPS Port</label>
-                                            <input type="number" id="ble-https-port" class="form-control" min="1" max="65535" value="443">
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="ble-https-endpoint">Endpoint</label>
-                                            <input type="text" id="ble-https-endpoint" class="form-control" placeholder="/api/v1/telemetry">
-                                        </div>
+                                        <label for="ble-profile-wait-after-retries">Bağlantı Denemelerinden Sonra Bekleme (saniye)</label>
+                                        <input type="number" id="ble-profile-wait-after-retries" class="form-control" min="0" max="300" value="30">
                                     </div>
                                     <div class="form-group">
-                                        <label for="ble-https-access-token">Access Token</label>
-                                        <input type="text" id="ble-https-access-token" class="form-control" placeholder="Access token">
+                                        <label for="ble-profile-poll-period">Polling Aralığı (ms)</label>
+                                        <input type="number" id="ble-profile-poll-period" class="form-control" min="100" max="60000" value="10000">
+                                    </div>
+                                    
+                                    <hr>
+                                    <h5 style="margin-bottom: 15px;">Telemetry Ayarları</h5>
+                                    <div id="ble-telemetry-list" style="margin-bottom: 15px;">
+                                        <p class="text-muted">Henüz telemetry eklenmedi</p>
+                                    </div>
+                                    <div class="form-group">
+                                        <button type="button" id="add-telemetry" class="btn btn-secondary">Telemetry Ekle</button>
+                                    </div>
+                                    
+                                    <div class="form-group" style="margin-top: 20px;">
+                                        <button id="save-ble-profile" class="btn btn-primary">Profili Kaydet</button>
+                                        <button id="cancel-ble-profile" class="btn btn-secondary" style="margin-left: 10px;">İptal</button>
+                                        <button id="delete-ble-profile" class="btn btn-danger" style="margin-left: 10px; display: none;">Profili Sil</button>
                                     </div>
                                 </div>
-                                <div class="form-group">
-                                    <label>Bağlı Cihazlar</label>
-                                    <div id="ble-devices" class="device-list">
-                                        <p class="text-muted">Henüz cihaz bulunmuyor</p>
-                                    </div>
-                                </div>
-                                <button id="save-ble" class="btn btn-primary">Kaydet</button>
+                                
                                 <div id="ble-message" class="message"></div>
                             </div>
                         </div>
