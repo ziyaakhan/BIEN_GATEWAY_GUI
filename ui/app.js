@@ -242,6 +242,12 @@ async function loadConfig() {
             if (config.modbus.error_handling) document.getElementById('modbus-error-handling').value = config.modbus.error_handling;
         }
 
+        // Modbus profilleri
+        if (config.modbus_profiles) {
+            modbusProfiles = config.modbus_profiles;
+            renderModbusProfilesList();
+        }
+
         // BLE
         if (config.ble) {
             document.getElementById('ble-enabled').checked = config.ble.enabled || false;
@@ -317,8 +323,23 @@ function setupRS485() {
     // Kaydet butonu (ayar değişiklikleri için)
     saveBtn.addEventListener('click', async () => {
         try {
+            const profile = {
+                enabled: document.getElementById('modbus-enabled').checked,
+                slave_id: parseInt(document.getElementById('modbus-slave-id').value),
+                polling_interval: parseInt(document.getElementById('modbus-polling-interval').value),
+                function_codes: document.getElementById('modbus-function-codes').value,
+                register_map: document.getElementById('modbus-register-map').value,
+                data_type: document.getElementById('modbus-data-type').value,
+                byte_order: document.getElementById('modbus-byte-order').value,
+                retry_count: parseInt(document.getElementById('modbus-retry-count').value),
+                error_handling: document.getElementById('modbus-error-handling').value
+            };
+
+            modbusProfiles.push(profile);
+
             await saveModbusConfig();
-            // İstenmediği için başarı mesajı gösterme
+            await saveModbusProfiles();
+            renderModbusProfilesList();
         } catch (error) {
             showMessage('rs485-message', 'Kaydetme başarısız: ' + error.message, true);
         }
@@ -347,6 +368,54 @@ async function saveModbusConfig() {
         console.error('Modbus config save error:', error);
         throw error;
     }
+}
+
+// Modbus profilleri (backend: config.modbus_profiles)
+let modbusProfiles = [];
+
+function renderModbusProfilesList() {
+    const listEl = document.getElementById('modbus-profiles-list');
+    if (!listEl) return;
+
+    if (!modbusProfiles.length) {
+        listEl.innerHTML = '<p class="text-muted">Henüz profil yok</p>';
+        return;
+    }
+
+    listEl.innerHTML = modbusProfiles.map((p, index) => `
+        <div class="device-item" style="padding: 10px; margin-bottom: 5px; border: 1px solid #e1e8ed; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <strong>Profil ${index + 1}</strong><br>
+                Slave ID: ${p.slave_id ?? '-'} | Interval: ${p.polling_interval ?? '-'} ms
+            </div>
+            <div>
+                <button class="btn btn-secondary" style="padding: 5px 10px;" onclick="window.loadModbusProfile(${index})">Yükle</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+window.loadModbusProfile = function(index) {
+    const profile = modbusProfiles[index];
+    if (!profile) return;
+
+    document.getElementById('modbus-enabled').checked = !!profile.enabled;
+    document.getElementById('modbus-slave-id').value = profile.slave_id ?? 1;
+    document.getElementById('modbus-polling-interval').value = profile.polling_interval ?? 1000;
+    document.getElementById('modbus-function-codes').value = profile.function_codes ?? '3,4';
+    document.getElementById('modbus-register-map').value = profile.register_map ?? '';
+    document.getElementById('modbus-data-type').value = profile.data_type ?? 'uint16';
+    document.getElementById('modbus-byte-order').value = profile.byte_order ?? 'big_endian';
+    document.getElementById('modbus-retry-count').value = profile.retry_count ?? 3;
+    document.getElementById('modbus-error-handling').value = profile.error_handling ?? 'retry';
+    toggleModbusSettings(document.getElementById('modbus-enabled').checked);
+};
+
+async function saveModbusProfiles() {
+    const result = await apiCall('/config/modbus/profiles', 'POST', {
+        profiles: modbusProfiles
+    });
+    return result;
 }
 
 // ============================================================================
