@@ -4,8 +4,24 @@
     "enabled": false,
     "baudrate": 9600,
     "parity": "none",
-    "slave_id": 1
+    "data_bits": 8,
+    "stop_bits": 1,
+    "flow_control": "none",
+    "timeout": 1000,
+    "direction_control": "auto"
   },
+  "modbus": {
+    "enabled": false,
+    "slave_id": 1,
+    "polling_interval": 1000,
+    "function_codes": "3,4",
+    "register_map": "{}",
+    "data_type": "uint16",
+    "byte_order": "big_endian",
+    "retry_count": 3,
+    "error_handling": "retry"
+  },
+  "modbus_profiles": [],
   "ble": {
     "enabled": false,
     "profiles": []
