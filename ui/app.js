@@ -617,6 +617,7 @@ function setupBLE() {
     const deleteProfileBtn = document.getElementById('delete-ble-profile');
     const addTelemetryBtn = document.getElementById('add-telemetry');
     const bleEnabled = document.getElementById('ble-enabled');
+    const bleMessage = document.getElementById('ble-message');
     
     // Element kontrolü - eğer yoksa, navigation değiştiğinde tekrar dene
     if (!scanBtn || !addProfileBtn || !saveProfileBtn || !cancelProfileBtn || !deleteProfileBtn || !addTelemetryBtn || !bleEnabled) {
@@ -633,6 +634,13 @@ function setupBLE() {
     
     bleSetupDone = true;
     console.log('BLE setup başlatılıyor...');
+    
+    // Sayfa ilk açıldığında varsa eski başarı mesajını temizle
+    if (bleMessage) {
+        bleMessage.textContent = '';
+        bleMessage.className = 'message';
+        bleMessage.style.display = 'none';
+    }
     
     // BLE tarama
     scanBtn.addEventListener('click', async (e) => {

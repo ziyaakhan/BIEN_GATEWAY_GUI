@@ -476,3 +476,20 @@ body {
 .form-row .form-group {
     margin-bottom: 0;
 }
+
+/* BLE profile action buttons */
+.ble-profile-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.ble-profile-actions .btn {
+    min-width: 150px;
+}
+
+.ble-profile-delete {
+    text-align: center;
+    margin-top: 10px;
+}
