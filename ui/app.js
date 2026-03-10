@@ -285,17 +285,6 @@ async function loadConfig() {
     }
 }
 
-// ============================================================================
-// RS-485 Configuration
-// ============================================================================
-
-function toggleRS485Settings(enabled) {
-    const rs485Settings = document.getElementById('rs485-settings');
-    if (rs485Settings) {
-        rs485Settings.style.display = enabled ? 'block' : 'none';
-    }
-}
-
 function toggleModbusSettings(enabled) {
     const modbusSettings = document.getElementById('modbus-settings');
     const modbusBody = document.getElementById('rs485-settings');
@@ -312,43 +301,30 @@ function toggleModbusSettings(enabled) {
 function setupRS485() {
     const saveBtn = document.getElementById('save-rs485');
     const modbusEnabled = document.getElementById('modbus-enabled');
-    const rs485Enabled = document.getElementById('rs485-enabled');
     
-    if (rs485Enabled) {
-        // İlk yüklemede mevcut duruma göre göster/gizle
-        toggleRS485Settings(rs485Enabled.checked);
-        rs485Enabled.addEventListener('change', (e) => {
-            toggleRS485Settings(e.target.checked);
-        });
+    if (!saveBtn || !modbusEnabled) {
+        return;
     }
     
-    modbusEnabled.addEventListener('change', (e) => {
+    // İlk yüklemede mevcut duruma göre göster/gizle
+    toggleModbusSettings(modbusEnabled.checked);
+    
+    // Aç/Kapat değişince hemen kaydet
+    modbusEnabled.addEventListener('change', async (e) => {
         toggleModbusSettings(e.target.checked);
+        try {
+            await saveModbusConfig();
+            showMessage('rs485-message', 'Modbus durumu kaydedildi');
+        } catch (error) {
+            showMessage('rs485-message', 'Kaydetme başarısız: ' + error.message, true);
+        }
     });
     
+    // Kaydet butonu (ayar değişiklikleri için)
     saveBtn.addEventListener('click', async () => {
-        const config = {
-            enabled: document.getElementById('rs485-enabled').checked,
-            baudrate: parseInt(document.getElementById('rs485-baudrate').value),
-            parity: document.getElementById('rs485-parity').value,
-            data_bits: parseInt(document.getElementById('rs485-data-bits').value),
-            stop_bits: parseFloat(document.getElementById('rs485-stop-bits').value),
-            flow_control: document.getElementById('rs485-flow-control').value,
-            timeout: parseInt(document.getElementById('rs485-timeout').value),
-            direction_control: document.getElementById('rs485-direction-control').value
-        };
-
         try {
-            const result = await apiCall('/config/rs485', 'POST', config);
-            
-            if (result && result.status === 'success') {
-                showMessage('rs485-message', 'RS-485 ayarları kaydedildi');
-                
-                // Save Modbus config if enabled
-                if (modbusEnabled.checked) {
-                    await saveModbusConfig();
-                }
-            }
+            await saveModbusConfig();
+            showMessage('rs485-message', 'Modbus ayarları kaydedildi');
         } catch (error) {
             showMessage('rs485-message', 'Kaydetme başarısız: ' + error.message, true);
         }
@@ -375,6 +351,7 @@ async function saveModbusConfig() {
         }
     } catch (error) {
         console.error('Modbus config save error:', error);
+        throw error;
     }
 }
 
@@ -770,22 +747,10 @@ function setupLoRaWAN() {
     const forwarderType = document.getElementById('lorawan-forwarder-type');
     const lorawanEnabled = document.getElementById('lorawan-enabled');
     
-    if (lorawanEnabled) {
-        // İlk yüklemede mevcut duruma göre göster/gizle
-        toggleLoRaWANSettingsVisibility(lorawanEnabled.checked);
-        lorawanEnabled.addEventListener('change', (e) => {
-            toggleLoRaWANSettingsVisibility(e.target.checked);
-        });
-    }
-    
-    forwarderType.addEventListener('change', (e) => {
-        toggleForwarderSettings(e.target.value);
-    });
-    
-    saveBtn.addEventListener('click', async () => {
+    const buildLoRaWANConfig = () => {
         const forwarderTypeValue = forwarderType.value;
         const config = {
-            enabled: document.getElementById('lorawan-enabled').checked,
+            enabled: lorawanEnabled.checked,
             gateway_id: document.getElementById('lorawan-gateway-id').value,
             forwarder_type: forwarderTypeValue
         };
@@ -798,8 +763,36 @@ function setupLoRaWAN() {
             config.udp_port = parseInt(document.getElementById('lorawan-udp-port').value);
         }
 
+        return config;
+    };
+
+    const saveLoRaWANConfig = async () => {
+        const config = buildLoRaWANConfig();
+        const result = await apiCall('/config/lorawan', 'POST', config);
+        return result;
+    };
+    
+    if (lorawanEnabled) {
+        // İlk yüklemede mevcut duruma göre göster/gizle
+        toggleLoRaWANSettingsVisibility(lorawanEnabled.checked);
+        lorawanEnabled.addEventListener('change', async (e) => {
+            toggleLoRaWANSettingsVisibility(e.target.checked);
+            try {
+                await saveLoRaWANConfig();
+                showMessage('lorawan-message', 'LoRaWAN durumu kaydedildi');
+            } catch (error) {
+                showMessage('lorawan-message', 'Kaydetme başarısız: ' + error.message, true);
+            }
+        });
+    }
+    
+    forwarderType.addEventListener('change', (e) => {
+        toggleForwarderSettings(e.target.value);
+    });
+    
+    saveBtn.addEventListener('click', async () => {
         try {
-            const result = await apiCall('/config/lorawan', 'POST', config);
+            const result = await saveLoRaWANConfig();
             
             if (result && result.status === 'success') {
                 showMessage('lorawan-message', 'LoRaWAN ayarları kaydedildi');
