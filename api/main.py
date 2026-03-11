@@ -834,7 +834,7 @@ async def scan_ble(request: Request):
         raise HTTPException(status_code=500, detail=f"BLE tarama başarısız: {str(e)}")
 
 
-BLE_LAST_SEEN_PATH = "/tmp/ble_last_seen.json"
+BLE_LAST_SEEN_PATH = "/tmp/iot_last_seen.json"
 BLE_ACTIVE_TIMEOUT = 120  # 2 dakika
 
 
