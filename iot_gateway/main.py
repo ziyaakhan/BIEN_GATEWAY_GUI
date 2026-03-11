@@ -42,6 +42,7 @@ class MQTTManager:
         self.port = port
         self.token = token
         self._connected = False
+        self._logged = False
         mgr = self
 
         try:
@@ -51,12 +52,16 @@ class MQTTManager:
         self.client.username_pw_set(token)
 
         def on_connect(*args):
-            if not mgr._connected:
-                mgr._connected = True
+            mgr._connected = True
+            if not mgr._logged:
+                mgr._logged = True
                 print(f"[{mgr.name} MQTT] Baglandi ({host}:{port})")
 
+        def on_disconnect(*args):
+            mgr._connected = False
+
         self.client.on_connect = on_connect
-        self.client.on_disconnect = lambda *args: setattr(mgr, '_connected', False)
+        self.client.on_disconnect = on_disconnect
 
         try:
             self.client.connect(host, port, 60)
@@ -301,19 +306,27 @@ def modbus_read_registers(profile):
     values = {}
     fmt, reg_count = DATA_TYPE_FORMAT.get(data_type, (">H", 1))
     fc = int(function_codes.split(",")[0].strip())
+    OFFLINE_UNSIGNED = 0xFFFF
+    OFFLINE_SIGNED = 0x7FFF
 
     try:
-        for key, address in register_map.items():
-            addr = int(address)
+        for key, reg_def in register_map.items():
+            if isinstance(reg_def, dict):
+                addr = int(reg_def.get("address", 0))
+                scale = float(reg_def.get("scale", 1))
+            else:
+                addr = int(reg_def)
+                scale = 1.0
+
             try:
                 if fc == 3:
-                    result = client.read_holding_registers(addr, reg_count, slave=slave_id)
+                    result = client.read_holding_registers(addr, count=reg_count, device_id=slave_id)
                 elif fc == 4:
-                    result = client.read_input_registers(addr, reg_count, slave=slave_id)
+                    result = client.read_input_registers(addr, count=reg_count, device_id=slave_id)
                 elif fc == 1:
-                    result = client.read_coils(addr, 1, slave=slave_id)
+                    result = client.read_coils(addr, count=1, device_id=slave_id)
                 elif fc == 2:
-                    result = client.read_discrete_inputs(addr, 1, slave=slave_id)
+                    result = client.read_discrete_inputs(addr, count=1, device_id=slave_id)
                 else:
                     print(f"  Desteklenmeyen FC: {fc}")
                     continue
@@ -326,16 +339,20 @@ def modbus_read_registers(profile):
                     values[key] = result.bits[0]
                 elif reg_count == 1:
                     raw = result.registers[0]
+                    if raw == OFFLINE_UNSIGNED or raw == OFFLINE_SIGNED:
+                        continue
                     if data_type == "int16":
-                        values[key] = struct.unpack(">h", struct.pack(">H", raw))[0]
-                    else:
-                        values[key] = raw
+                        raw = struct.unpack(">h", struct.pack(">H", raw))[0]
+                    value = raw * scale
+                    values[key] = round(value, 2) if scale != 1 else value
                 else:
                     regs = result.registers[:reg_count]
                     if byte_order == "little_endian":
                         regs = list(reversed(regs))
                     raw_bytes = b"".join(struct.pack(">H", r) for r in regs)
-                    values[key] = struct.unpack(fmt, raw_bytes)[0]
+                    raw = struct.unpack(fmt, raw_bytes)[0]
+                    value = raw * scale
+                    values[key] = round(value, 2) if scale != 1 else value
 
             except Exception as e:
                 print(f"  Register {key}@{addr}: Okuma hatası - {e}")
