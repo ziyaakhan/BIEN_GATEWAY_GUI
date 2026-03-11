@@ -12,7 +12,7 @@ Donanım:   Raspberry Pi (Seeed WM1302 LoRa HAT, BLE, RS-485)
 Erişim:    http://<gateway-ip>  (port 80 → 8000 yönlendirmeli)
 ```
 
-## Proje Yapısı
+## Proje Yapısı    
 
 ```
 BIEN_GATEWAY_GUI/
