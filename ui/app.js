@@ -926,6 +926,18 @@ function setupBLE() {
     
     bleSetupDone = true;
     console.log('BLE setup başlatılıyor...');
+
+    // Güvenli başlangıç: sayfa BLE sekmesinde açıldıysa ayar görünürlüğünü senkronla
+    // (bazı durumlarda eski inline style/cache yüzünden görünürlük takılı kalabiliyor)
+    try {
+        toggleBLESettings(!!bleEnabled.checked);
+        const bleSettingsEl = document.getElementById('ble-settings');
+        if (bleSettingsEl && bleEnabled.checked) {
+            bleSettingsEl.style.display = 'block';
+        }
+    } catch (e) {
+        console.warn('BLE settings görünürlük senkron hatası:', e);
+    }
     
     // Sayfa ilk açıldığında varsa eski başarı mesajını temizle
     if (bleMessage) {

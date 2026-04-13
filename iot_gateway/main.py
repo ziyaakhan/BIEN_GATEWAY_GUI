@@ -11,7 +11,16 @@ import time
 import os
 import struct
 
-CONFIG_PATH = os.path.expanduser("~/BIEN_GATEWAY_GUI/config/gateway.json")
+#
+# Config path:
+# - API tarafı proje içindeki `config/gateway.json` dosyasını kullanıyor.
+# - Systemd servisi root olarak çalışırsa `~` -> `/root` olur ve config mismatch yaşanır.
+# Bu yüzden default'u bu dosyanın konumuna göre belirliyoruz.
+#
+_DEFAULT_CONFIG_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "config", "gateway.json")
+)
+CONFIG_PATH = os.environ.get("BIEN_GATEWAY_CONFIG", _DEFAULT_CONFIG_PATH)
 LAST_SEEN_PATH = "/tmp/iot_last_seen.json"
 
 # -------------------------------------------------------------------------
