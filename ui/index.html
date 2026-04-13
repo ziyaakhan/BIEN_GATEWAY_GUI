@@ -380,8 +380,12 @@
                                         <input type="text" id="ble-profile-service-uuid" class="form-control" placeholder="0000180f-0000-1000-8000-00805f9b34fb">
                                     </div>
                                     <div class="form-group">
-                                        <label for="ble-profile-characteristic-uuid">Karakteristik UUID</label>
-                                        <input type="text" id="ble-profile-characteristic-uuid" class="form-control" placeholder="00002a19-0000-1000-8000-00805f9b34fb">
+                                        <label>Karakteristikler</label>
+                                        <div id="ble-characteristics-list" style="margin-bottom: 10px;"></div>
+                                        <button type="button" id="add-ble-characteristic" class="btn btn-secondary" style="width: auto; padding: 8px 20px;">Yeni Karakteristik Ekle</button>
+                                        <p class="text-muted" style="margin-top: 8px;">
+                                            Her karakteristik için ayrı <strong>read / write / notify</strong> modu, okuma aralığı ve telemetry tanımlayabilirsiniz.
+                                        </p>
                                     </div>
                                     <div class="form-row">
                                         <div class="form-group">
@@ -402,15 +406,6 @@
                                         <input type="number" id="ble-profile-poll-period" class="form-control" min="100" max="60000" value="10000">
                                     </div>
                                     
-                                    <hr>
-                                    <h5 style="margin-bottom: 15px;">Telemetry Ayarları</h5>
-                                    <div id="ble-telemetry-list" style="margin-bottom: 15px;">
-                                        <p class="text-muted">Henüz telemetry eklenmedi</p>
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <button type="button" id="add-telemetry" class="btn btn-secondary" style="width: auto; padding: 8px 20px;">Telemetry Ekle</button>
-                                    </div>
                                     <div class="form-group modbus-profile-actions">
                                         <button id="save-ble-profile" class="btn btn-primary">Profili Kaydet</button>
                                         <button id="cancel-ble-profile" class="btn btn-secondary">İptal</button>

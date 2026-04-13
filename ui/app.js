@@ -325,8 +325,27 @@ function setupRS485() {
     
     toggleModbusSettings(modbusEnabled.checked);
     
-    modbusEnabled.addEventListener('change', (e) => {
-        toggleModbusSettings(e.target.checked);
+    const buildModbusConfigFromForm = (enabled) => ({
+        enabled: !!enabled,
+        slave_id: parseInt(document.getElementById('modbus-slave-id')?.value) || 1,
+        polling_interval: parseInt(document.getElementById('modbus-polling-interval')?.value) || 1000,
+        function_codes: document.getElementById('modbus-function-codes')?.value || "3,4",
+        register_map: document.getElementById('modbus-register-map')?.value || "{}",
+        data_type: document.getElementById('modbus-data-type')?.value || "uint16",
+        byte_order: document.getElementById('modbus-byte-order')?.value || "big_endian",
+        retry_count: parseInt(document.getElementById('modbus-retry-count')?.value) || 3,
+        error_handling: document.getElementById('modbus-error-handling')?.value || "retry",
+    });
+
+    modbusEnabled.addEventListener('change', async (e) => {
+        const enabled = !!e.target.checked;
+        toggleModbusSettings(enabled);
+        try {
+            await apiCall('/config/modbus', 'POST', buildModbusConfigFromForm(enabled));
+            showMessage('rs485-message', enabled ? 'Modbus etkinleştirildi' : 'Modbus devre dışı bırakıldı');
+        } catch (error) {
+            showMessage('rs485-message', 'Kaydetme başarısız: ' + error.message, true);
+        }
     });
     
     addProfileBtn.addEventListener('click', () => {
@@ -521,7 +540,8 @@ function toggleBLESettings(enabled) {
 }
 
 let bleProfiles = [];
-let currentTelemetryItems = [];
+let currentCharacteristics = [];
+let pendingSelectedCharacteristicUuid = '';
 let wifiSetupDone = false;
 
 function updateBLEScannedDevices(devices) {
@@ -555,11 +575,18 @@ function updateBLEScannedDevices(devices) {
 window.selectBLEDevice = function(mac, serviceUuid, characteristicUuid) {
     const macInput = document.getElementById('ble-profile-mac');
     const serviceInput = document.getElementById('ble-profile-service-uuid');
-    const charInput = document.getElementById('ble-profile-characteristic-uuid');
     
     if (macInput) macInput.value = mac || '';
     if (serviceInput && serviceUuid) serviceInput.value = serviceUuid;
-    if (charInput && characteristicUuid) charInput.value = characteristicUuid;
+    if (characteristicUuid) {
+        pendingSelectedCharacteristicUuid = characteristicUuid;
+        if (!currentCharacteristics.length) {
+            currentCharacteristics = [createDefaultCharacteristic(characteristicUuid)];
+        } else if (!currentCharacteristics[0].uuid) {
+            currentCharacteristics[0].uuid = characteristicUuid;
+        }
+        renderCharacteristicsList();
+    }
     
     // Profil formunu göster
     const profileForm = document.getElementById('ble-profile-form');
@@ -567,6 +594,166 @@ window.selectBLEDevice = function(mac, serviceUuid, characteristicUuid) {
         profileForm.style.display = 'block';
     }
 };
+
+function createDefaultCharacteristic(uuid = '') {
+    return {
+        name: '',
+        uuid: uuid || '',
+        mode: 'notify', // read | write | notify
+        poll_period: 10000, // ms
+        write_payload_hex: '',
+        telemetry: []
+    };
+}
+
+function renderCharacteristicsList() {
+    const listEl = document.getElementById('ble-characteristics-list');
+    if (!listEl) return;
+
+    if (!currentCharacteristics.length) {
+        listEl.innerHTML = '<p class="text-muted">Henüz karakteristik eklenmedi</p>';
+        return;
+    }
+
+    const escapeHtml = (s) => (s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+
+    listEl.innerHTML = currentCharacteristics.map((ch, chIndex) => {
+        const mode = ch.mode || 'notify';
+        const telemetryItems = Array.isArray(ch.telemetry) ? ch.telemetry : [];
+        return `
+            <div style="padding: 12px; margin-bottom: 12px; border: 1px solid #e1e8ed; border-radius: 6px; background: #f8f9fa;">
+                <div style="display:flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <strong>Karakteristik ${chIndex + 1}</strong>
+                    <button type="button" class="btn btn-danger" style="width:auto; padding:6px 10px;" onclick="removeBLECharacteristic(${chIndex})">Sil</button>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Ad (opsiyonel)</label>
+                        <input type="text" class="form-control ble-ch-name" data-ch-index="${chIndex}" value="${escapeHtml(ch.name)}" placeholder="Örn: battery, temp">
+                    </div>
+                    <div class="form-group" style="flex: 2;">
+                        <label>UUID</label>
+                        <input type="text" class="form-control ble-ch-uuid" data-ch-index="${chIndex}" value="${escapeHtml(ch.uuid)}" placeholder="00002a19-0000-1000-8000-00805f9b34fb">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Mod</label>
+                        <select class="form-control ble-ch-mode" data-ch-index="${chIndex}">
+                            <option value="read" ${mode === 'read' ? 'selected' : ''}>Read</option>
+                            <option value="write" ${mode === 'write' ? 'selected' : ''}>Write</option>
+                            <option value="notify" ${mode === 'notify' ? 'selected' : ''}>Notify</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>Read/Notify Aralığı (ms)</label>
+                        <input type="number" class="form-control ble-ch-poll" data-ch-index="${chIndex}" min="100" max="600000" value="${parseInt(ch.poll_period || 10000)}">
+                    </div>
+                </div>
+
+                <div class="form-group ble-ch-write-wrap" data-ch-index="${chIndex}" style="display:${mode === 'write' ? 'block' : 'none'};">
+                    <label>Write Payload (HEX, opsiyonel)</label>
+                    <input type="text" class="form-control ble-ch-write-payload" data-ch-index="${chIndex}" value="${escapeHtml(ch.write_payload_hex)}" placeholder="Örn: 010203">
+                    <small class="text-muted">Boş bırakılırsa write yapılmaz (sadece yapı saklanır).</small>
+                </div>
+
+                <div style="margin-top: 10px;">
+                    <div style="display:flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px;">
+                        <strong>Telemetry</strong>
+                        <button type="button" class="btn btn-secondary" style="width:auto; padding:6px 10px;" onclick="addTelemetryItem(${chIndex})">Telemetry Ekle</button>
+                    </div>
+                    <div class="ble-telemetry-list" data-ch-index="${chIndex}">
+                        ${telemetryItems.length ? telemetryItems.map((item, idx) => `
+                            <div style="padding: 10px; margin-bottom: 10px; border: 1px solid #e1e8ed; border-radius: 4px; background: #fff;">
+                                <div class="form-row">
+                                    <div class="form-group" style="flex: 1;">
+                                        <label>Key</label>
+                                        <input type="text" class="form-control ble-tlm-key" data-ch-index="${chIndex}" data-item-index="${idx}" value="${escapeHtml(item.key)}" placeholder="Örn: temperature">
+                                    </div>
+                                    <div class="form-group" style="flex: 1;">
+                                        <label>Value Expression</label>
+                                        <input type="text" class="form-control ble-tlm-expr" data-ch-index="${chIndex}" data-item-index="${idx}" value="${escapeHtml(item.valueExpression)}" placeholder="Örn: [0], [:], [1,2]">
+                                    </div>
+                                    <div class="form-group" style="width: 100px;">
+                                        <label>&nbsp;</label>
+                                        <button type="button" class="btn btn-danger" onclick="removeTelemetryItem(${chIndex}, ${idx})" style="width: 100%;">Sil</button>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('') : '<p class="text-muted">Henüz telemetry eklenmedi</p>'}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Input listeners
+    listEl.querySelectorAll('.ble-ch-name').forEach(input => {
+        input.addEventListener('input', (e) => {
+            const chIndex = parseInt(e.target.dataset.chIndex);
+            if (currentCharacteristics[chIndex]) currentCharacteristics[chIndex].name = e.target.value;
+        });
+    });
+    listEl.querySelectorAll('.ble-ch-uuid').forEach(input => {
+        input.addEventListener('input', (e) => {
+            const chIndex = parseInt(e.target.dataset.chIndex);
+            if (currentCharacteristics[chIndex]) currentCharacteristics[chIndex].uuid = e.target.value;
+        });
+    });
+    listEl.querySelectorAll('.ble-ch-mode').forEach(select => {
+        select.addEventListener('change', (e) => {
+            const chIndex = parseInt(e.target.dataset.chIndex);
+            if (currentCharacteristics[chIndex]) currentCharacteristics[chIndex].mode = e.target.value;
+            const wrap = listEl.querySelector(`.ble-ch-write-wrap[data-ch-index="${chIndex}"]`);
+            if (wrap) wrap.style.display = (e.target.value === 'write') ? 'block' : 'none';
+        });
+    });
+    listEl.querySelectorAll('.ble-ch-poll').forEach(input => {
+        input.addEventListener('input', (e) => {
+            const chIndex = parseInt(e.target.dataset.chIndex);
+            if (currentCharacteristics[chIndex]) currentCharacteristics[chIndex].poll_period = parseInt(e.target.value) || 10000;
+        });
+    });
+    listEl.querySelectorAll('.ble-ch-write-payload').forEach(input => {
+        input.addEventListener('input', (e) => {
+            const chIndex = parseInt(e.target.dataset.chIndex);
+            if (currentCharacteristics[chIndex]) currentCharacteristics[chIndex].write_payload_hex = e.target.value;
+        });
+    });
+    listEl.querySelectorAll('.ble-tlm-key').forEach(input => {
+        input.addEventListener('input', (e) => {
+            const chIndex = parseInt(e.target.dataset.chIndex);
+            const itemIndex = parseInt(e.target.dataset.itemIndex);
+            const item = currentCharacteristics[chIndex]?.telemetry?.[itemIndex];
+            if (item) item.key = e.target.value;
+        });
+    });
+    listEl.querySelectorAll('.ble-tlm-expr').forEach(input => {
+        input.addEventListener('input', (e) => {
+            const chIndex = parseInt(e.target.dataset.chIndex);
+            const itemIndex = parseInt(e.target.dataset.itemIndex);
+            const item = currentCharacteristics[chIndex]?.telemetry?.[itemIndex];
+            if (item) item.valueExpression = e.target.value;
+        });
+    });
+}
+
+window.removeBLECharacteristic = function(chIndex) {
+    currentCharacteristics.splice(chIndex, 1);
+    renderCharacteristicsList();
+};
+
+function addBLECharacteristic(uuid = '') {
+    currentCharacteristics.push(createDefaultCharacteristic(uuid));
+    renderCharacteristicsList();
+}
 
 async function updateBLEProfilesList() {
     const profilesList = document.getElementById('ble-profiles-list');
@@ -604,67 +791,19 @@ async function updateBLEProfilesList() {
     }).join('');
 }
 
-function addTelemetryItem() {
-    const telemetryList = document.getElementById('ble-telemetry-list');
-    const index = currentTelemetryItems.length;
-    
-    const telemetryItem = {
-        key: '',
-        valueExpression: ''
-    };
-    currentTelemetryItems.push(telemetryItem);
-    
-    renderTelemetryList();
-}
-
-// Global scope'ta olmalı (HTML onclick için)
-window.removeTelemetryItem = function(index) {
-    console.log('removeTelemetryItem çağrıldı, index:', index);
-    currentTelemetryItems.splice(index, 1);
-    renderTelemetryList();
+window.addTelemetryItem = function(chIndex) {
+    if (!currentCharacteristics[chIndex]) return;
+    currentCharacteristics[chIndex].telemetry = currentCharacteristics[chIndex].telemetry || [];
+    currentCharacteristics[chIndex].telemetry.push({ key: '', valueExpression: '' });
+    renderCharacteristicsList();
 };
 
-function renderTelemetryList() {
-    const telemetryList = document.getElementById('ble-telemetry-list');
-    if (currentTelemetryItems.length === 0) {
-        telemetryList.innerHTML = '<p class="text-muted">Henüz telemetry eklenmedi</p>';
-        return;
-    }
-    
-    telemetryList.innerHTML = currentTelemetryItems.map((item, index) => `
-        <div style="padding: 10px; margin-bottom: 10px; border: 1px solid #e1e8ed; border-radius: 4px; background: #f8f9fa;">
-            <div class="form-row">
-                <div class="form-group" style="flex: 1;">
-                    <label>Key</label>
-                    <input type="text" class="form-control telemetry-key" data-index="${index}" value="${item.key}" placeholder="Örn: temperature">
-                </div>
-                <div class="form-group" style="flex: 1;">
-                    <label>Value Expression</label>
-                    <input type="text" class="form-control telemetry-expression" data-index="${index}" value="${item.valueExpression}" placeholder="Örn: [0], [:], [1,2]">
-                </div>
-                <div class="form-group" style="width: 100px;">
-                    <label>&nbsp;</label>
-                    <button class="btn btn-danger" onclick="removeTelemetryItem(${index})" style="width: 100%;">Sil</button>
-                </div>
-            </div>
-        </div>
-    `).join('');
-    
-    // Event listeners ekle
-    document.querySelectorAll('.telemetry-key').forEach(input => {
-        input.addEventListener('input', (e) => {
-            const index = parseInt(e.target.dataset.index);
-            currentTelemetryItems[index].key = e.target.value;
-        });
-    });
-    
-    document.querySelectorAll('.telemetry-expression').forEach(input => {
-        input.addEventListener('input', (e) => {
-            const index = parseInt(e.target.dataset.index);
-            currentTelemetryItems[index].valueExpression = e.target.value;
-        });
-    });
-}
+window.removeTelemetryItem = function(chIndex, itemIndex) {
+    const arr = currentCharacteristics[chIndex]?.telemetry;
+    if (!arr) return;
+    arr.splice(itemIndex, 1);
+    renderCharacteristicsList();
+};
 
 // Global scope'ta olmalı (HTML onclick için)
 window.editBLEProfile = function(index) {
@@ -679,14 +818,27 @@ window.editBLEProfile = function(index) {
     document.getElementById('ble-profile-name').value = profile.name || '';
     document.getElementById('ble-profile-mac').value = profile.mac || '';
     document.getElementById('ble-profile-service-uuid').value = profile.service_uuid || '';
-    document.getElementById('ble-profile-characteristic-uuid').value = profile.characteristic_uuid || '';
     document.getElementById('ble-profile-connect-retry').value = profile.connect_retry || 3;
     document.getElementById('ble-profile-connect-retry-seconds').value = profile.connect_retry_seconds || 10;
     document.getElementById('ble-profile-wait-after-retries').value = profile.wait_after_retries || 30;
     document.getElementById('ble-profile-poll-period').value = profile.poll_period || 10000;
-    
-    currentTelemetryItems = profile.telemetry ? [...profile.telemetry] : [];
-    renderTelemetryList();
+
+    if (Array.isArray(profile.characteristics) && profile.characteristics.length) {
+        currentCharacteristics = profile.characteristics.map(ch => ({
+            name: ch.name || '',
+            uuid: ch.uuid || '',
+            mode: ch.mode || 'notify',
+            poll_period: parseInt(ch.poll_period || profile.poll_period || 10000),
+            write_payload_hex: ch.write_payload_hex || '',
+            telemetry: Array.isArray(ch.telemetry) ? ch.telemetry.map(t => ({ key: t.key || '', valueExpression: t.valueExpression || '' })) : []
+        }));
+    } else {
+        // Geriye dönük uyumluluk
+        currentCharacteristics = [createDefaultCharacteristic(profile.characteristic_uuid || pendingSelectedCharacteristicUuid)];
+        currentCharacteristics[0].poll_period = profile.poll_period || 10000;
+        currentCharacteristics[0].telemetry = profile.telemetry ? [...profile.telemetry] : [];
+    }
+    renderCharacteristicsList();
     
     const profileForm = document.getElementById('ble-profile-form');
     const deleteBtn = document.getElementById('delete-ble-profile');
@@ -710,13 +862,13 @@ function clearBLEProfileForm() {
     document.getElementById('ble-profile-name').value = '';
     document.getElementById('ble-profile-mac').value = '';
     document.getElementById('ble-profile-service-uuid').value = '';
-    document.getElementById('ble-profile-characteristic-uuid').value = '';
     document.getElementById('ble-profile-connect-retry').value = 3;
     document.getElementById('ble-profile-connect-retry-seconds').value = 10;
     document.getElementById('ble-profile-wait-after-retries').value = 30;
     document.getElementById('ble-profile-poll-period').value = 10000;
-    currentTelemetryItems = [];
-    renderTelemetryList();
+    currentCharacteristics = [];
+    pendingSelectedCharacteristicUuid = '';
+    renderCharacteristicsList();
     document.getElementById('ble-profile-form').style.display = 'none';
     document.getElementById('delete-ble-profile').style.display = 'none';
 }
@@ -755,12 +907,12 @@ function setupBLE() {
     const saveProfileBtn = document.getElementById('save-ble-profile');
     const cancelProfileBtn = document.getElementById('cancel-ble-profile');
     const deleteProfileBtn = document.getElementById('delete-ble-profile');
-    const addTelemetryBtn = document.getElementById('add-telemetry');
+    const addCharacteristicBtn = document.getElementById('add-ble-characteristic');
     const bleEnabled = document.getElementById('ble-enabled');
     const bleMessage = document.getElementById('ble-message');
     
     // Element kontrolü - eğer yoksa, navigation değiştiğinde tekrar dene
-    if (!scanBtn || !addProfileBtn || !saveProfileBtn || !cancelProfileBtn || !deleteProfileBtn || !addTelemetryBtn || !bleEnabled) {
+    if (!scanBtn || !addProfileBtn || !saveProfileBtn || !cancelProfileBtn || !deleteProfileBtn || !addCharacteristicBtn || !bleEnabled) {
         console.log('BLE elementleri henüz yüklenmedi, navigation değiştiğinde tekrar deneniyor...');
         bleSetupDone = false; // Flag'i sıfırla ki tekrar denesin
         return;
@@ -817,6 +969,10 @@ function setupBLE() {
         e.stopPropagation();
         console.log('Yeni profil ekle butonuna tıklandı!');
         clearBLEProfileForm();
+        if (!currentCharacteristics.length) {
+            currentCharacteristics = [createDefaultCharacteristic(pendingSelectedCharacteristicUuid)];
+        }
+        renderCharacteristicsList();
         const profileForm = document.getElementById('ble-profile-form');
         if (profileForm) {
             profileForm.style.display = 'block';
@@ -831,20 +987,37 @@ function setupBLE() {
     // Profil kaydet
     saveProfileBtn.addEventListener('click', async () => {
         const profileId = document.getElementById('ble-profile-id').value;
+        const cleanedCharacteristics = (currentCharacteristics || [])
+            .map(ch => ({
+                name: (ch.name || '').trim(),
+                uuid: (ch.uuid || '').trim(),
+                mode: ch.mode || 'notify',
+                poll_period: parseInt(ch.poll_period || 10000),
+                write_payload_hex: (ch.write_payload_hex || '').trim(),
+                telemetry: (Array.isArray(ch.telemetry) ? ch.telemetry : [])
+                    .filter(t => t && t.key && t.valueExpression)
+                    .map(t => ({ key: t.key, valueExpression: t.valueExpression }))
+            }))
+            .filter(ch => ch.uuid);
+
         const profile = {
             name: document.getElementById('ble-profile-name').value,
             mac: document.getElementById('ble-profile-mac').value,
             service_uuid: document.getElementById('ble-profile-service-uuid').value,
-            characteristic_uuid: document.getElementById('ble-profile-characteristic-uuid').value,
             connect_retry: parseInt(document.getElementById('ble-profile-connect-retry').value) || 3,
             connect_retry_seconds: parseInt(document.getElementById('ble-profile-connect-retry-seconds').value) || 10,
             wait_after_retries: parseInt(document.getElementById('ble-profile-wait-after-retries').value) || 30,
             poll_period: parseInt(document.getElementById('ble-profile-poll-period').value) || 10000,
-            telemetry: currentTelemetryItems.filter(item => item.key && item.valueExpression)
+            characteristics: cleanedCharacteristics
         };
         
         if (!profile.name || !profile.mac) {
             showMessage('ble-message', 'Lütfen cihaz ismi ve MAC adresi girin', true);
+            return;
+        }
+
+        if (!profile.characteristics.length) {
+            showMessage('ble-message', 'Lütfen en az 1 karakteristik UUID ekleyin', true);
             return;
         }
         
@@ -873,9 +1046,9 @@ function setupBLE() {
         }
     });
     
-    // Telemetry ekle
-    addTelemetryBtn.addEventListener('click', () => {
-        addTelemetryItem();
+    // Karakteristik ekle
+    addCharacteristicBtn.addEventListener('click', () => {
+        addBLECharacteristic();
     });
     
     // BLE enabled toggle

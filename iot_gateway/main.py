@@ -152,64 +152,134 @@ async def ble_fetch_and_publish(profile):
 
     name = profile.get("name", "BLE_Device")
     mac = profile.get("mac", "")
-    char_uuid = profile.get("characteristic_uuid", "")
     connect_retry = profile.get("connect_retry", 3)
     connect_retry_seconds = profile.get("connect_retry_seconds", 10)
     wait_after_retries = profile.get("wait_after_retries", 30)
     poll_period = profile.get("poll_period", 10000)
-    telemetry_map = profile.get("telemetry", [])
 
-    if not mac or not char_uuid:
-        print(f"[BLE:{name}] MAC veya UUID eksik, atlanıyor.")
+    # Yeni yapı: characteristics[] (geri uyumluluk: characteristic_uuid + telemetry)
+    characteristics = profile.get("characteristics") or []
+    if not characteristics:
+        legacy_uuid = profile.get("characteristic_uuid", "")
+        legacy_tlm = profile.get("telemetry", [])
+        if legacy_uuid:
+            characteristics = [{
+                "name": "",
+                "uuid": legacy_uuid,
+                "mode": "notify",
+                "poll_period": poll_period,
+                "telemetry": legacy_tlm
+            }]
+
+    if not mac or not characteristics:
+        print(f"[BLE:{name}] MAC veya karakteristik eksik, atlanıyor.")
         return
 
     print(f"\n[BLE:{name}] ({mac}) Bağlanılıyor...")
 
     for attempt in range(1, connect_retry + 1):
-        data_received = asyncio.Event()
-        received_payload = {}
-
-        def notification_handler(sender, data):
-            nonlocal received_payload
-            try:
-                values = {}
-                if telemetry_map:
-                    for item in telemetry_map:
-                        key = item.get("key", "")
-                        expr = item.get("valueExpression", "")
-                        if key and expr:
-                            values[key] = parse_ble_value(data, expr)
-                else:
-                    values = {"raw": list(data)}
-
-                received_payload = {
-                    name: [{
-                        "ts": int(round(time.time() * 1000)),
-                        "values": values
-                    }]
-                }
-                data_received.set()
-            except Exception as e:
-                print(f"  Veri ayrıştırma hatası: {e}")
-
         try:
             async with BleakClient(mac, timeout=15.0) as client:
                 if client.is_connected:
                     print(f"  -> Bağlandı (deneme {attempt}/{connect_retry})")
-                    await client.start_notify(char_uuid, notification_handler)
-                    try:
-                        timeout_sec = poll_period / 1000.0
-                        await asyncio.wait_for(data_received.wait(), timeout=max(timeout_sec, 10.0))
-                        update_last_seen(mac, "ble")
-                        if ble_mqtt.publish("v1/gateway/telemetry", received_payload):
-                            print(f"  -> MQTT gönderildi: {received_payload}")
+                    for ch in characteristics:
+                        ch_uuid = (ch.get("uuid") or "").strip()
+                        if not ch_uuid:
+                            continue
+
+                        ch_name = (ch.get("name") or "").strip()
+                        mode = (ch.get("mode") or "notify").strip().lower()
+                        ch_poll = int(ch.get("poll_period") or poll_period or 10000)
+                        telemetry_map = ch.get("telemetry") or []
+
+                        def build_values(data_bytes):
+                            try:
+                                values = {}
+                                prefix = f"{ch_name}." if ch_name else ""
+                                if telemetry_map:
+                                    for item in telemetry_map:
+                                        key = item.get("key", "")
+                                        expr = item.get("valueExpression", "")
+                                        if key and expr:
+                                            values[prefix + key] = parse_ble_value(data_bytes, expr)
+                                else:
+                                    values[prefix + "raw"] = list(data_bytes)
+                                return values
+                            except Exception as e:
+                                print(f"  Veri ayrıştırma hatası: {e}")
+                                return None
+
+                        if mode == "notify":
+                            data_received = asyncio.Event()
+                            received_payload = {}
+
+                            def notification_handler(sender, data):
+                                nonlocal received_payload
+                                values = build_values(data)
+                                if values is None:
+                                    return
+                                received_payload = {
+                                    name: [{
+                                        "ts": int(round(time.time() * 1000)),
+                                        "values": values
+                                    }]
+                                }
+                                data_received.set()
+
+                            await client.start_notify(ch_uuid, notification_handler)
+                            try:
+                                timeout_sec = ch_poll / 1000.0
+                                await asyncio.wait_for(data_received.wait(), timeout=max(timeout_sec, 10.0))
+                                update_last_seen(mac, "ble")
+                                if ble_mqtt.publish("v1/gateway/telemetry", received_payload):
+                                    print(f"  -> MQTT gönderildi: {received_payload}")
+                                else:
+                                    print(f"  -> Veri alındı, MQTT bağlı değil: {received_payload}")
+                            except asyncio.TimeoutError:
+                                label = ch_name or ch_uuid
+                                print(f"  -> Notify veri gelmedi (Timeout) [{label}]")
+                            finally:
+                                await client.stop_notify(ch_uuid)
+
+                        elif mode == "read":
+                            try:
+                                data = await client.read_gatt_char(ch_uuid)
+                                values = build_values(data)
+                                if values is not None:
+                                    payload = {
+                                        name: [{
+                                            "ts": int(round(time.time() * 1000)),
+                                            "values": values
+                                        }]
+                                    }
+                                    update_last_seen(mac, "ble")
+                                    if ble_mqtt.publish("v1/gateway/telemetry", payload):
+                                        print(f"  -> MQTT gönderildi: {payload}")
+                                    else:
+                                        print(f"  -> Veri okundu, MQTT bağlı değil: {payload}")
+                            except Exception as e:
+                                label = ch_name or ch_uuid
+                                print(f"  -> Read hatası [{label}]: {e}")
+                            await asyncio.sleep(max(ch_poll / 1000.0, 0.1))
+
+                        elif mode == "write":
+                            payload_hex = (ch.get("write_payload_hex") or "").strip().replace(" ", "")
+                            if payload_hex:
+                                try:
+                                    data = bytes.fromhex(payload_hex)
+                                    await client.write_gatt_char(ch_uuid, data, response=False)
+                                    label = ch_name or ch_uuid
+                                    print(f"  -> Write OK [{label}] ({len(data)} bytes)")
+                                except Exception as e:
+                                    label = ch_name or ch_uuid
+                                    print(f"  -> Write hatası [{label}]: {e}")
+                            await asyncio.sleep(max(ch_poll / 1000.0, 0.1))
+
                         else:
-                            print(f"  -> Veri alındı, MQTT bağlı değil: {received_payload}")
-                        return
-                    except asyncio.TimeoutError:
-                        print(f"  -> Veri gelmedi (Timeout)")
-                    finally:
-                        await client.stop_notify(char_uuid)
+                            label = ch_name or ch_uuid
+                            print(f"  -> Desteklenmeyen BLE mode [{label}]: {mode}")
+
+                    return
                 else:
                     print(f"  -> Bağlantı kurulamadı (deneme {attempt}/{connect_retry})")
         except Exception as e:
@@ -390,6 +460,7 @@ async def modbus_loop(config):
         name = profile.get("name", "Modbus_Device")
         serial_port = profile.get("serial_port", "?")
         slave_id = profile.get("slave_id", 1)
+        polling_interval_ms = int(profile.get("polling_interval", 1000) or 1000)
         print(f"\n[Modbus:{name}] Port:{serial_port} Slave:{slave_id} okunuyor...")
 
         try:
@@ -406,7 +477,7 @@ async def modbus_loop(config):
         except Exception as e:
             print(f"  -> Modbus hatası: {e}")
 
-        await asyncio.sleep(1)
+        await asyncio.sleep(max(polling_interval_ms / 1000.0, 0.1))
 
 # -------------------------------------------------------------------------
 # Ana Döngü
@@ -427,8 +498,10 @@ async def main():
         await ble_loop(config)
         await modbus_loop(config)
 
-        print("\n[Gateway] Döngü tamamlandı, 15s bekleniyor...")
-        await asyncio.sleep(15)
+        # Eskiden burada sabit 15s bekleme vardı. Artık sabit bekleme yok.
+        # Eğer tüm servisler kapalıysa CPU spin olmaması için kısa bekle.
+        if not config.get("ble", {}).get("enabled", False) and not config.get("modbus", {}).get("enabled", False):
+            await asyncio.sleep(1)
 
 
 if __name__ == "__main__":
