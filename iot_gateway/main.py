@@ -305,8 +305,7 @@ async def ble_loop(config):
     mqtt_cfg = config.get("ble_mqtt", {})
     mqtt_ok = ble_mqtt.setup(mqtt_cfg.get("host", ""), mqtt_cfg.get("port", 1883), mqtt_cfg.get("token", ""))
     if not mqtt_ok:
-        print("[BLE] MQTT bağlantısı yok, atlanıyor.")
-        return
+        print("[BLE] MQTT bağlantısı yok (publish yapılmayacak).")
 
     print(f"\n[BLE] {len(profiles)} profil işleniyor...")
     for profile in profiles:
@@ -452,8 +451,7 @@ async def modbus_loop(config):
     mqtt_cfg = config.get("modbus_mqtt", {})
     mqtt_ok = modbus_mqtt.setup(mqtt_cfg.get("host", ""), mqtt_cfg.get("port", 1883), mqtt_cfg.get("token", ""))
     if not mqtt_ok:
-        print("[Modbus] MQTT bağlantısı yok, atlanıyor.")
-        return
+        print("[Modbus] MQTT bağlantısı yok (publish yapılmayacak).")
 
     print(f"\n[Modbus] {len(profiles)} profil işleniyor...")
     for profile in profiles:
