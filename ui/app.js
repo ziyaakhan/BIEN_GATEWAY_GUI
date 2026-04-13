@@ -534,9 +534,40 @@ async function saveModbusProfiles() {
 
 function toggleBLESettings(enabled) {
     const bleSettings = document.getElementById('ble-settings');
+    const bleEnabled = document.getElementById('ble-enabled');
+    // Eğer checkbox mevcutsa, görünürlük kaynağı checkbox olsun (race condition'ları önler)
+    const effective = (bleEnabled && typeof bleEnabled.checked === 'boolean')
+        ? !!bleEnabled.checked
+        : !!enabled;
     if (bleSettings) {
-        bleSettings.style.display = enabled ? 'block' : 'none';
+        bleSettings.style.display = effective ? 'block' : 'none';
     }
+}
+
+let bleVisibilitySyncInstalled = false;
+function installBLEVisibilitySync() {
+    if (bleVisibilitySyncInstalled) return;
+    bleVisibilitySyncInstalled = true;
+
+    const apply = () => {
+        try {
+            toggleBLESettings();
+        } catch (e) {
+            /* ignore */
+        }
+    };
+
+    // Checkbox değişince her zaman senkronla (setupBLE çalışmasa bile)
+    document.addEventListener('change', (e) => {
+        const t = e.target;
+        if (t && t.id === 'ble-enabled') {
+            apply();
+        }
+    });
+
+    // İlk yüklemede bir kere senkronla (loadConfig race condition'larına karşı)
+    setTimeout(apply, 0);
+    setTimeout(apply, 300);
 }
 
 let bleProfiles = [];
@@ -1413,6 +1444,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     setupSystem();
     console.log('✓ setupSystem tamamlandı');
+
+    // BLE görünürlük senkronu (checkbox -> settings)
+    installBLEVisibilitySync();
 
     // Check existing session before showing login
     (async () => {
